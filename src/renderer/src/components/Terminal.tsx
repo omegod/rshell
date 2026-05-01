@@ -3,6 +3,7 @@ import { Spin, Space } from 'antd'
 import { Terminal as XTerminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { DashboardOutlined, CloudDownloadOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import '@xterm/xterm/css/xterm.css'
 import { SystemStats } from '../../shared/types'
@@ -60,9 +61,14 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive }) => {
 
     const fitAddon = new FitAddon()
     const webLinksAddon = new WebLinksAddon()
+    const unicode11Addon = new Unicode11Addon()
 
     xterm.loadAddon(fitAddon)
     xterm.loadAddon(webLinksAddon)
+    xterm.loadAddon(unicode11Addon)
+
+    // 激活 Unicode 11 以正确处理宽字符（如 🔥）
+    xterm.unicode.activeVersion = '11'
 
     xterm.open(terminalRef.current)
 
