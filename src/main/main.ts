@@ -6,12 +6,15 @@ let mainWindow: BrowserWindow | null = null
 let ipcManager: IPCManager | null = null
 
 function createWindow(): void {
+  const iconPath = join(__dirname, '../../resources/icon.png')
+
   mainWindow = new BrowserWindow({
     width: 1080,
     height: 700,
     minWidth: 1080,
     minHeight: 700,
     title: 'RShell',
+    icon: iconPath,
     show: false,
     frame: false,
     titleBarStyle: 'hiddenInset',
@@ -24,6 +27,10 @@ function createWindow(): void {
     },
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#ffffff',
   })
+
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(iconPath)
+  }
 
   ipcManager = new IPCManager(mainWindow)
 

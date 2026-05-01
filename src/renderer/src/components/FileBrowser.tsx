@@ -203,6 +203,18 @@ export default function FileBrowser({
     }
   }, [sessionId])
 
+  const submitPath = useCallback(async (path: string) => {
+    const trimmed = path.trim()
+    if (!trimmed || trimmed === currentPath) return
+    try {
+      await window.api.files.list(sessionId, trimmed)
+      onPathChange(trimmed)
+    } catch {
+      messageApi.error('路径不存在')
+      setPathInput(currentPath)
+    }
+  }, [sessionId, currentPath, onPathChange, messageApi])
+
   const handlePathInputChange = useCallback((value: string) => {
     setPathInput(value)
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -213,28 +225,35 @@ export default function FileBrowser({
     selectingRef.current = true
     setPathInput(value)
     setPathOptions([])
-    onPathChange(value)
-  }, [onPathChange])
+    submitPath(value)
+    // 延迟重置，确保 onBlur 不会触发
+    setTimeout(() => {
+      selectingRef.current = false
+    }, 200)
+  }, [submitPath])
 
   const handlePathSubmit = async () => {
-    const trimmed = pathInput.trim()
-    if (!trimmed || trimmed === currentPath) return
-    try {
-      await window.api.files.list(sessionId, trimmed)
-      onPathChange(trimmed)
-    } catch {
-      messageApi.error('路径不存在')
-      setPathInput(currentPath)
-    }
+    // 如果正在通过下拉框选择，不重复提交
+    if (selectingRef.current) return
+    submitPath(pathInput)
   }
 
   const handlePathBlur = () => {
-    if (selectingRef.current) { selectingRef.current = false; return }
+    if (selectingRef.current) return
     handlePathSubmit()
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); handlePathSubmit() }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      // 如果下拉框开着，AutoComplete 的 onSelect 会处理，这里通过 selectingRef 拦截
+      // 如果下拉框没开，直接提交当前输入内容
+      setTimeout(() => {
+        if (!selectingRef.current) {
+          handlePathSubmit()
+        }
+      }, 50)
+    }
   }
 
   const handleUpload = async () => {
