@@ -2,11 +2,24 @@ import { app, shell, BrowserWindow, Menu, nativeTheme, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { IPCManager } from './ipc.js'
 
+// 禁用自动填充以减少开发工具中的内部报错 (如 Autofill.setAddresses failed)
+app.commandLine.appendSwitch('disable-autofill')
+app.commandLine.appendSwitch('disable-features', 'AutofillServerCommunication')
+
 let mainWindow: BrowserWindow | null = null
 let ipcManager: IPCManager | null = null
+let isQuitting = false
 
 function createWindow(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+    return
+  }
+
   const iconPath = join(__dirname, '../../resources/icon.png')
+  // ... rest of the code
 
   mainWindow = new BrowserWindow({
     width: 1080,
@@ -70,7 +83,23 @@ function createWindow(): void {
   })
 
   ipcMain.handle('window:close', () => {
-    mainWindow?.close()
+    if (process.platform === 'darwin') {
+      mainWindow?.hide()
+    } else {
+      mainWindow?.close()
+    }
+  })
+
+  mainWindow.on('close', (event) => {
+    if (process.platform === 'darwin' && !isQuitting) {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
+  })
+
+  mainWindow.on('closed', () => {
+    mainWindow = null
+    ipcManager = null
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
@@ -156,9 +185,7 @@ app.whenReady().then(() => {
   createWindow()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    }
+    createWindow()
   })
 })
 
@@ -170,5 +197,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  isQuitting = true
   ipcManager?.disconnectAll()
 })
