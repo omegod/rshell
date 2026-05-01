@@ -29,7 +29,7 @@ function createWindow(): void {
   })
 
   if (process.platform === 'darwin') {
-    app.dock.setIcon(iconPath)
+    app.dock?.setIcon(iconPath)
   }
 
   ipcManager = new IPCManager(mainWindow)
@@ -82,38 +82,26 @@ function createWindow(): void {
 }
 
 function createMenu(): void {
+  const isDev = !!process.env['ELECTRON_RENDERER_URL']
   const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: 'RShell',
       submenu: [
         { label: '关于 RShell', role: 'about' },
         { type: 'separator' },
+        {
+          label: '设置...',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => {
+            mainWindow?.webContents.send('menu:open-settings')
+          },
+        },
+        { type: 'separator' },
         { label: '隐藏 RShell', role: 'hide' },
         { label: '隐藏其他', role: 'hideOthers' },
         { label: '显示全部', role: 'unhide' },
         { type: 'separator' },
         { label: '退出 RShell', role: 'quit' },
-      ],
-    },
-    {
-      label: '连接',
-      submenu: [
-        {
-          label: '连接管理',
-          accelerator: 'CmdOrCtrl+Shift+O',
-          click: () => {
-            mainWindow?.webContents.send('menu:open-manager')
-          },
-        },
-        {
-          label: '打开连接',
-          accelerator: 'CmdOrCtrl+N',
-          click: () => {
-            mainWindow?.webContents.send('menu:open-manager')
-          },
-        },
-        { type: 'separator' },
-        { label: '关闭窗口', role: 'close' },
       ],
     },
     {
@@ -133,10 +121,14 @@ function createMenu(): void {
     {
       label: '视图',
       submenu: [
-        { label: '重新加载', role: 'reload' },
-        { label: '强制重新加载', role: 'forceReload' },
-        { label: '切换开发者工具', role: 'toggleDevTools' },
-        { type: 'separator' },
+        ...(isDev
+          ? [
+              { label: '重新加载', role: 'reload' as const },
+              { label: '强制重新加载', role: 'forceReload' as const },
+              { label: '切换开发者工具', role: 'toggleDevTools' as const },
+              { type: 'separator' as const }
+            ]
+          : []),
         { label: '重置缩放', role: 'resetZoom' },
         { label: '放大', role: 'zoomIn' },
         { label: '缩小', role: 'zoomOut' },

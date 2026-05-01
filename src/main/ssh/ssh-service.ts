@@ -10,6 +10,7 @@ export interface SSHSession {
   shell: ClientChannel | null
   connected: boolean
   configId: string
+  home?: string
 }
 
 export class SSHService {
@@ -166,18 +167,27 @@ export class SSHService {
     if (!session || !session.connected) {
       return remotePath
     }
-    const home = await new Promise<string>((resolve) => {
-      session.client.exec('echo $HOME', (err, stream) => {
-        if (err) {
-          resolve('/root')
-          return
-        }
-        let output = ''
-        stream.on('data', (data: Buffer) => { output += data.toString('utf-8') })
-        stream.on('close', () => { resolve(output.trim() || '/root') })
+
+    if (!session.home) {
+      session.home = await new Promise<string>((resolve) => {
+        session.client.exec('echo $HOME', (err, stream) => {
+          if (err) {
+            resolve('/root')
+            return
+          }
+          let output = ''
+          stream.on('data', (data: Buffer) => { output += data.toString('utf-8') })
+          stream.on('close', () => { resolve(output.trim() || '/root') })
+          stream.on('error', () => { resolve('/root') })
+          // Set timeout to prevent hanging
+          setTimeout(() => resolve(output.trim() || '/root'), 5000)
+        })
       })
-    })
+    }
+
+    const home = session.home!
     if (remotePath === '~') return home
+    if (remotePath.startsWith('~/')) return path.posix.join(home, remotePath.slice(2))
     return remotePath.replace('~', home)
   }
 
@@ -187,25 +197,37 @@ export class SSHService {
       throw new Error('Session not connected')
     }
 
-    const resolvedPath = await this.resolvePath(sessionId, remotePath)
+    let resolvedPath: string
+    try {
+      resolvedPath = await this.resolvePath(sessionId, remotePath)
+    } catch (err) {
+      throw new Error(`Failed to resolve path: ${err}`)
+    }
 
     return new Promise((resolve, reject) => {
       session.sftp.readdir(resolvedPath, (err, list) => {
         if (err) {
-          reject(new Error(`Failed to list directory: ${err}`))
+          const errorMsg = String(err)
+          if (errorMsg.includes('No such file')) {
+            reject(new Error(`Directory not found: ${resolvedPath}`))
+          } else {
+            reject(new Error(`Failed to list directory: ${err}`))
+          }
           return
         }
 
-        const files = list.map((item) => ({
-          name: item.filename,
-          path: path.posix.join(resolvedPath, item.filename),
-          isDirectory: item.attrs.isDirectory(),
-          size: item.attrs.size,
-          permissions: this.formatPermissions(item.attrs.mode),
-          owner: String(item.attrs.uid),
-          group: String(item.attrs.gid),
-          modifiedAt: new Date(item.attrs.mtime * 1000).toISOString(),
-        }))
+        const files = list
+          .filter((item) => item.filename !== '.' && item.filename !== '..')
+          .map((item) => ({
+            name: item.filename,
+            path: path.posix.join(resolvedPath, item.filename),
+            isDirectory: item.attrs.isDirectory(),
+            size: item.attrs.size,
+            permissions: this.formatPermissions(item.attrs.mode),
+            owner: String(item.attrs.uid),
+            group: String(item.attrs.gid),
+            modifiedAt: new Date(item.attrs.mtime * 1000).toISOString(),
+          }))
 
         files.sort((a, b) => {
           if (a.isDirectory !== b.isDirectory) {
@@ -449,12 +471,47 @@ export class SSHService {
     const resolvedPath = await this.resolvePath(sessionId, remotePath)
 
     return new Promise((resolve, reject) => {
-      session.sftp.readFile(resolvedPath, (err, data) => {
+      // Use lstat to check the actual node type (prevent following symlinks to directories)
+      session.sftp.lstat(resolvedPath, (err, stats) => {
         if (err) {
-          reject(new Error(`Read file failed: ${err}`))
-        } else {
-          resolve(data.toString('utf-8'))
+          reject(new Error(`Failed to get file stats: ${err}`))
+          return
         }
+
+        if (stats.isDirectory()) {
+          reject(new Error('Cannot open a directory as a file'))
+          return
+        }
+
+        // Limit file size for editor (e.g., 5MB)
+        const MAX_SIZE = 5 * 1024 * 1024
+        if (stats.size > MAX_SIZE) {
+          reject(new Error(`File is too large to edit (${(stats.size / 1024 / 1024).toFixed(2)}MB). Max size is 5MB.`))
+          return
+        }
+
+        session.sftp.readFile(resolvedPath, (readErr, data) => {
+          if (readErr) {
+            reject(new Error(`Read file failed: ${readErr}`))
+          } else {
+            // Detect if file is binary by checking for null bytes in the first 8KB
+            // For very small files, we check if they are printable
+            const buffer = data.slice(0, 8192)
+            let isBinary = false
+            for (let i = 0; i < buffer.length; i++) {
+              if (buffer[i] === 0) {
+                isBinary = true
+                break
+              }
+            }
+
+            if (isBinary) {
+              reject(new Error('不支持的文件格式：该文件似乎是二进制文件，无法编辑'))
+            } else {
+              resolve(data.toString('utf-8'))
+            }
+          }
+        })
       })
     })
   }
@@ -619,9 +676,10 @@ export class SSHService {
       callback(err)
     }
 
-    session.sftp.readdir(remotePath, (err, list) => {
+    session.sftp.readdir(remotePath, (err, rawList) => {
       if (err) return done(err)
 
+      const list = rawList.filter((item) => item.filename !== '.' && item.filename !== '..')
       let pending = list.length
       if (pending === 0) return session.sftp.rmdir(remotePath, done)
 

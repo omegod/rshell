@@ -58,7 +58,11 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.developer-tools"
+      "icon": "resources/icon.png",
+      "category": "public.app-category.developer-tools",
+      "extendInfo": {
+        "NSAppleScriptEnabled": false
+      }
     },
     "win": {
       "target": [

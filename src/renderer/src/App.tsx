@@ -8,6 +8,7 @@ import Terminal from './components/Terminal'
 import ConnectionDialog from './components/ConnectionDialog'
 import ConnectionManager from './components/ConnectionManager'
 import FileEditor from './components/FileEditor'
+import SettingsDialog from './components/SettingsDialog'
 
 const { Content } = Layout
 
@@ -16,11 +17,21 @@ interface SessionState {
   currentPath: string
 }
 
+interface AppSettings {
+  theme: 'light' | 'dark'
+  terminalFontSize: number
+}
+
 function App() {
   const [sessions, setSessions] = useState<SessionState[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [showConnectionManager, setShowConnectionManager] = useState(true)
   const [showNewConnection, setShowNewConnection] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    const saved = localStorage.getItem('rshell-settings')
+    return saved ? JSON.parse(saved) : { theme: 'light', terminalFontSize: 14 }
+  })
   const [editingConfig, setEditingConfig] = useState<SSHConnectionConfig | null>(null)
   const [editingFile, setEditingFile] = useState<FileInfo | null>(null)
   const [lastUpdatedFile, setLastUpdatedFile] = useState<FileInfo | null>(null)
@@ -57,6 +68,10 @@ function App() {
 
     const handleOpenManager = () => {
       setShowConnectionManager(true)
+    }
+
+    const handleOpenSettings = () => {
+      setShowSettings(true)
     }
 
     const handleShellData = (e: Event) => {
@@ -96,6 +111,7 @@ function App() {
 
     window.addEventListener('menu:new-connection', handleNewConnection)
     window.addEventListener('menu:open-manager', handleOpenManager)
+    window.addEventListener('menu:open-settings', handleOpenSettings)
     window.addEventListener('shell:data', handleShellData)
     window.addEventListener('shell:close', handleShellClose)
     window.addEventListener('sessions:connected', handleSessionConnected)
@@ -104,6 +120,7 @@ function App() {
     return () => {
       window.removeEventListener('menu:new-connection', handleNewConnection)
       window.removeEventListener('menu:open-manager', handleOpenManager)
+      window.removeEventListener('menu:open-settings', handleOpenSettings)
       window.removeEventListener('shell:data', handleShellData)
       window.removeEventListener('shell:close', handleShellClose)
       window.removeEventListener('sessions:connected', handleSessionConnected)
@@ -127,10 +144,8 @@ function App() {
     }
     setSessions((prev) => prev.filter((s) => s.session.id !== sessionId))
     if (activeSessionId === sessionId) {
-      setActiveSessionId((prev) => {
-        const remaining = sessions.filter((s) => s.session.id !== sessionId)
-        return remaining.length > 0 ? remaining[0].session.id : null
-      })
+      const remaining = sessions.filter((s) => s.session.id !== sessionId)
+      setActiveSessionId(remaining.length > 0 ? remaining[0].session.id : null)
     }
     messageApi.success('已断开连接')
   }, [activeSessionId, sessions, messageApi])
@@ -145,9 +160,16 @@ function App() {
 
   const activeSession = sessions.find((s) => s.session.id === activeSessionId)
 
+  const handleSaveSettings = (newSettings: AppSettings) => {
+    setSettings(newSettings)
+    localStorage.setItem('rshell-settings', JSON.stringify(newSettings))
+    messageApi.success('设置已保存')
+  }
+
   return (
     <ConfigProvider
       theme={{
+        algorithm: settings.theme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
           colorPrimary: '#1677ff',
           borderRadius: 6,
@@ -155,13 +177,13 @@ function App() {
         },
         components: {
           Modal: {
-            headerBg: '#f5f5f5',
-            contentBg: '#ffffff',
-            footerBg: '#ffffff',
+            headerBg: settings.theme === 'dark' ? '#1f1f1f' : '#f5f5f5',
+            contentBg: settings.theme === 'dark' ? '#141414' : '#ffffff',
+            footerBg: settings.theme === 'dark' ? '#141414' : '#ffffff',
           },
           Table: {
-            headerBg: '#f5f5f5',
-            headerColor: '#6e6e73',
+            headerBg: settings.theme === 'dark' ? '#1d1d1d' : '#f5f5f5',
+            headerColor: settings.theme === 'dark' ? '#d9d9d9' : '#6e6e73',
             headerBorderRadius: 0,
           },
         },
@@ -214,6 +236,7 @@ function App() {
                       <Terminal
                         sessionId={s.session.id}
                         isActive={s.session.id === activeSessionId}
+                        fontSize={settings.terminalFontSize}
                       />
                     </div>
                   </div>
@@ -289,6 +312,13 @@ function App() {
           onSave={(file) => setLastUpdatedFile(file)}
         />
       )}
+
+      <SettingsDialog
+        open={showSettings}
+        settings={settings}
+        onClose={() => setShowSettings(false)}
+        onSave={handleSaveSettings}
+      />
     </ConfigProvider>
   )
 }

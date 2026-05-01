@@ -11,9 +11,10 @@ import { SystemStats } from '../../shared/types'
 interface TerminalProps {
   sessionId: string
   isActive: boolean
+  fontSize?: number
 }
 
-const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive }) => {
+const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 }) => {
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -27,7 +28,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive }) => {
 
     const xterm = new XTerminal({
       fontFamily: '"SF Mono", "Menlo", "Monaco", "Courier New", monospace',
-      fontSize: 14,
+      fontSize: fontSize,
       lineHeight: 1.2,
       cursorBlink: true,
       cursorStyle: 'block',
@@ -164,6 +165,17 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive }) => {
       fitAddonRef.current = null
     }
   }, [sessionId, isActive])
+
+  useEffect(() => {
+    if (xtermRef.current && fitAddonRef.current) {
+      xtermRef.current.options.fontSize = fontSize
+      try {
+        fitAddonRef.current.fit()
+      } catch {
+        // ignore
+      }
+    }
+  }, [fontSize])
 
   useEffect(() => {
     if (isActive && fitAddonRef.current) {

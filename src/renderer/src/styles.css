@@ -332,7 +332,7 @@ body {
 }
 
 .file-browser-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -491,7 +491,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #434343;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .file-meta {
@@ -561,7 +561,7 @@ body {
 }
 
 .transfer-panel-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -645,7 +645,7 @@ body {
 }
 
 .ant-modal-title {
-  font-size: 13px !important;
+  font-size: 14px !important;
   font-weight: 600 !important;
   color: var(--text-primary) !important;
 }

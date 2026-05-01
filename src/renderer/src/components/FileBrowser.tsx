@@ -104,6 +104,7 @@ export default function FileBrowser({
     try {
       const fileList = await window.api.files.list(sessionId, path)
       setFiles(fileList)
+      setLoadedKeys([ROOT_KEY])
     } catch (err) {
       messageApi.error(`加载文件失败: ${err instanceof Error ? err.message : '未知错误'}`)
     } finally {
@@ -256,11 +257,12 @@ export default function FileBrowser({
     }
   }
 
-  const handleUpload = async () => {
+  const handleUpload = async (targetDirPath?: string) => {
+    const uploadPath = targetDirPath || currentPath
     const localPath = await window.api.app.pickFile({ title: '选择文件' })
     if (!localPath) return
     const fileName = localPath.split('/').pop() || ''
-    const remotePath = currentPath === '/' ? `/${fileName}` : `${currentPath}/${fileName}`
+    const remotePath = uploadPath === '/' ? `/${fileName}` : `${uploadPath}/${fileName}`
     const id = `upload_${++transferIdCounter}`
 
     setTransferPanelCollapsed(false)
@@ -272,7 +274,18 @@ export default function FileBrowser({
       await window.api.files.upload(sessionId, localPath, remotePath, id)
       setTransfers((prev) => prev.map((t) => t.id === id ? { ...t, progress: 100, speed: 0, status: 'completed' } : t))
       messageApi.success('上传成功')
-      loadFiles(currentPath)
+      
+      // 刷新目标目录
+      if (uploadPath === currentPath) {
+        loadFiles(currentPath)
+      } else {
+        setChildrenMap((prev) => {
+          const next = { ...prev }
+          delete next[uploadPath]
+          return next
+        })
+        setLoadedKeys((prev) => prev.filter(k => k !== uploadPath))
+      }
     } catch (err) {
       setTransfers((prev) => prev.map((t) => t.id === id ? { ...t, speed: 0, status: 'error' } : t))
       messageApi.error(`上传失败: ${err instanceof Error ? err.message : '未知错误'}`)
@@ -443,6 +456,7 @@ export default function FileBrowser({
     const items: any[] = []
     if (file.isDirectory) {
       items.push({ key: 'create', label: '新建', icon: <PlusOutlined />, onClick: () => handleCreate(file.path) })
+      items.push({ key: 'upload-to', label: '上传', icon: <UploadOutlined />, onClick: () => handleUpload(file.path) })
       items.push({ type: 'divider' as const })
     }
     items.push({ key: 'rename', label: '重命名', icon: <EditOutlined />, onClick: () => handleRename(file) })
@@ -621,7 +635,7 @@ export default function FileBrowser({
               }} />
             </Tooltip>
             <Tooltip title="上传">
-              <Button size="small" type="text" icon={<UploadOutlined />} onClick={handleUpload} />
+              <Button size="small" type="text" icon={<UploadOutlined />} onClick={() => handleUpload()} />
             </Tooltip>
             <Tooltip title="新建">
               <Button size="small" type="text" icon={<PlusOutlined />} onClick={() => handleCreate(currentPath)} />
@@ -643,7 +657,7 @@ export default function FileBrowser({
       </div>
       <div className="file-browser-content">
         <Spin spinning={loading} size="small">
-          {files.length === 0 && !loading && isRoot ? (
+          {files.length === 0 && !loading ? (
             <div style={{ padding: '40px 0' }}>
               <Empty description="空目录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             </div>

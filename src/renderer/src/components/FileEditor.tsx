@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Modal, Button, message, Spin } from 'antd'
-import { SaveOutlined, CloseOutlined } from '@ant-design/icons'
+import { Modal, Button, message, Spin, Empty } from 'antd'
+import { SaveOutlined, CloseOutlined, WarningOutlined } from '@ant-design/icons'
 import CodeMirror from '@uiw/react-codemirror'
 import { javascript } from '@codemirror/lang-javascript'
 import { python } from '@codemirror/lang-python'
@@ -49,14 +49,18 @@ const FileEditor: React.FC<FileEditorProps> = ({
     }
   }, [open, filePath])
 
+  const [error, setError] = useState<string | null>(null)
+
+  // ... (inside loadFileContent)
   const loadFileContent = async () => {
     setLoading(true)
+    setError(null)
     try {
       const data = await window.api.files.read(sessionId, filePath)
       setContent(data)
     } catch (err) {
-      messageApi.error(`读取文件失败: ${err instanceof Error ? err.message : '未知错误'}`)
-      onClose()
+      const msg = err instanceof Error ? err.message : '未知错误'
+      setError(msg)
     } finally {
       setLoading(false)
     }
@@ -142,16 +146,18 @@ const FileEditor: React.FC<FileEditorProps> = ({
           </span>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <Button
-            type="primary"
-            size="small"
-            icon={<SaveOutlined />}
-            loading={saving}
-            onClick={handleSave}
-            style={{ borderRadius: '4px' }}
-          >
-            保存
-          </Button>
+          {!error && (
+            <Button
+              type="primary"
+              size="small"
+              icon={<SaveOutlined />}
+              loading={saving}
+              onClick={handleSave}
+              style={{ borderRadius: '4px' }}
+            >
+              保存
+            </Button>
+          )}
           <Button
             size="small"
             icon={<CloseOutlined />}
@@ -166,7 +172,21 @@ const FileEditor: React.FC<FileEditorProps> = ({
       {/* 编辑器主体 */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <Spin spinning={loading} tip="加载中..." style={{ height: '100%', width: '100%' }} wrapperClassName="editor-spin-wrapper">
-          {!loading && (
+          {error ? (
+            <div style={{ 
+              height: '100%', 
+              display: 'flex', 
+              flexDirection: 'column',
+              alignItems: 'center', 
+              justifyContent: 'center',
+              padding: '20px',
+              textAlign: 'center'
+            }}>
+              <WarningOutlined style={{ fontSize: '48px', color: '#faad14', marginBottom: '16px' }} />
+              <div style={{ fontSize: '16px', fontWeight: 500, marginBottom: '8px' }}>无法打开文件</div>
+              <div style={{ color: 'var(--text-secondary)' }}>{error}</div>
+            </div>
+          ) : !loading && (
             <CodeMirror
               value={content}
               height="100%"
