@@ -495,11 +495,33 @@ export default function FileBrowser({
         onCancel={() => setShowCreateModal(false)}
         width={360}
         centered
+        destroyOnClose
+        styles={{
+          content: {
+            padding: 0,
+            borderRadius: '8px',
+            overflow: 'hidden',
+          },
+          body: {
+            padding: '20px 24px',
+          }
+        }}
         footer={(
-          <div className="modal-footer">
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'flex-end', 
+            alignItems: 'center',
+            backgroundColor: 'var(--bg-secondary)',
+            padding: '10px 16px',
+            borderTop: '1px solid var(--border-color)',
+          }}>
             <Space>
-              <Button onClick={() => setShowCreateModal(false)}>取消</Button>
-              <Button type="primary" onClick={handleCreateConfirm} loading={creating}>创建</Button>
+              <Button onClick={() => setShowCreateModal(false)}>
+                取消
+              </Button>
+              <Button type="primary" onClick={handleCreateConfirm} loading={creating}>
+                创建
+              </Button>
             </Space>
           </div>
         )}
