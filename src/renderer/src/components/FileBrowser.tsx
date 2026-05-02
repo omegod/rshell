@@ -1,34 +1,28 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
-  Tree, Button, Space, Modal, Input, AutoComplete, message, Spin, Empty, Tooltip, Dropdown,
-  Progress, Badge, Divider, Select, Form,
+  Tree, Button, Space, Modal, AutoComplete, message, Spin, Empty, Tooltip, Dropdown,
+  Select, Form, Input
 } from 'antd'
 import {
   FolderOutlined,
   FolderOpenOutlined,
   FileOutlined,
   UploadOutlined,
-  DownloadOutlined,
   DeleteOutlined,
   ReloadOutlined,
   RollbackOutlined,
-  ArrowUpOutlined,
   EditOutlined,
   FileTextOutlined,
   MoreOutlined,
   PlusOutlined,
-  CaretRightOutlined,
-  CaretDownOutlined,
   DownOutlined,
   RightOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  CaretUpOutlined,
-  CaretDownOutlined as CaretDownIcon,
-  CloseOutlined,
 } from '@ant-design/icons'
 import { FileInfo } from '../../shared/types'
 import type { DataNode, TreeProps } from 'antd/es/tree'
+import { useSessionStore } from '../store/useSessionStore'
+import { useFileActions } from '../hooks/useFileActions'
+import { TransferPanel } from './FileBrowser/TransferPanel'
 
 interface FileBrowserProps {
   sessionId: string
@@ -41,19 +35,6 @@ interface FileBrowserProps {
 const PARENT_KEY = '__parent__'
 const ROOT_KEY = '__root__'
 
-interface TransferItem {
-  id: string
-  fileName: string
-  direction: 'upload' | 'download'
-  progress: number
-  speed: number
-  status: 'transferring' | 'completed' | 'error'
-  remotePath: string
-  startTime: number
-}
-
-let transferIdCounter = 0
-
 export default function FileBrowser({
   sessionId,
   currentPath,
@@ -61,23 +42,47 @@ export default function FileBrowser({
   onEditFile,
   updatedFile,
 }: FileBrowserProps) {
-  const [files, setFiles] = useState<FileInfo[]>([])
+  const {
+    sessions,
+    setPath,
+    setFiles,
+    setLoadedKeys,
+    setExpandedKeys: setStoreExpandedKeys,
+    updateTransfer,
+  } = useSessionStore()
+
+  const {
+    loadFiles,
+    loadDirChildren,
+    handleUpload,
+    handleDownload,
+    handleDelete,
+  } = useFileActions(sessionId)
+
+  const sessionState = sessions[sessionId] || { 
+    currentPath: '~', 
+    files: [], 
+    childrenMap: {}, 
+    loadedKeys: [], 
+    expandedKeys: [ROOT_KEY] 
+  }
+  
+  const files = sessionState.files
+  const childrenMap = sessionState.childrenMap
+  const loadedKeys = sessionState.loadedKeys
+  const expandedKeys = sessionState.expandedKeys
+
   const [loading, setLoading] = useState(false)
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([])
-  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([ROOT_KEY])
-  const [loadedKeys, setLoadedKeys] = useState<React.Key[]>([])
-  const [childrenMap, setChildrenMap] = useState<Record<string, FileInfo[]>>({})
   const [pathInput, setPathInput] = useState(currentPath)
   const [pathOptions, setPathOptions] = useState<{ value: string; label: React.ReactNode }[]>([])
   const [messageApi, contextHolder] = message.useMessage()
   const [modal, modalContextHolder] = Modal.useModal()
-  const loadingDirs = useRef<Set<string>>(new Set())
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
   const selectingRef = useRef(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
 
-  const [transfers, setTransfers] = useState<TransferItem[]>([])
   const [transferPanelCollapsed, setTransferPanelCollapsed] = useState(false)
 
   // 新建文件/文件夹相关状态
@@ -89,83 +94,40 @@ export default function FileBrowser({
 
   const dirName = currentPath === '/' ? '/' : currentPath.split('/').filter(Boolean).pop() || '/'
   const isRoot = currentPath === '/'
-  const activeTransfers = transfers.filter((t) => t.status === 'transferring')
 
   useEffect(() => {
     setPathInput(currentPath)
-    setExpandedKeys([ROOT_KEY])
+    setStoreExpandedKeys(sessionId, [ROOT_KEY])
     setSelectedKeys([])
-    setChildrenMap({})
-    setLoadedKeys([])
-  }, [currentPath])
+    setPath(sessionId, currentPath)
+  }, [currentPath, sessionId])
 
-  const loadFiles = useCallback(async (path: string) => {
-    setLoading(true)
-    try {
-      const fileList = await window.api.files.list(sessionId, path)
-      setFiles(fileList)
-      setLoadedKeys([ROOT_KEY])
-    } catch (err) {
-      messageApi.error(`加载文件失败: ${err instanceof Error ? err.message : '未知错误'}`)
-    } finally {
+  useEffect(() => {
+    const fetchFiles = async () => {
+      setLoading(true)
+      await loadFiles(currentPath)
       setLoading(false)
     }
-  }, [sessionId, messageApi])
-
-  useEffect(() => {
-    loadFiles(currentPath)
+    fetchFiles()
   }, [currentPath, loadFiles])
 
-  // 监听单个文件更新（手术级刷新）
+  // 监听单个文件更新
   useEffect(() => {
     if (!updatedFile) return
-
     const updateInList = (list: FileInfo[]) =>
       list.map((f) => (f.path === updatedFile.path ? updatedFile : f))
-
-    // 更新当前目录列表
-    setFiles((prev) => updateInList(prev))
-
-    // 更新子目录缓存
-    setChildrenMap((prev) => {
-      const next = { ...prev }
-      for (const [dirPath, list] of Object.entries(next)) {
-        next[dirPath] = updateInList(list)
-      }
-      return next
-    })
-  }, [updatedFile])
+    setFiles(sessionId, updateInList(files))
+  }, [updatedFile, sessionId])
 
   // 监听真实传输进度
   useEffect(() => {
     const handleProgress = (e: Event) => {
-      const { percent, speed } = (e as CustomEvent).detail
-      setTransfers((prev) => {
-        const idx = prev.findIndex((t) => t.status === 'transferring')
-        if (idx === -1) return prev
-        const next = [...prev]
-        next[idx] = { ...prev[idx], progress: percent, speed: speed || 0 }
-        return next
-      })
+      const { id, percent, speed } = (e as CustomEvent).detail
+      updateTransfer(id, { progress: percent, speed: speed || 0 })
     }
     window.addEventListener('files:progress', handleProgress)
     return () => window.removeEventListener('files:progress', handleProgress)
-  }, [])
-
-  const loadDirChildren = useCallback(async (dirPath: string): Promise<FileInfo[]> => {
-    if (loadingDirs.current.has(dirPath)) return []
-    loadingDirs.current.add(dirPath)
-    try {
-      const fileList = await window.api.files.list(sessionId, dirPath)
-      setChildrenMap((prev) => ({ ...prev, [dirPath]: fileList }))
-      return fileList
-    } catch (err) {
-      messageApi.error(`加载目录失败: ${err instanceof Error ? err.message : '未知错误'}`)
-      return []
-    } finally {
-      loadingDirs.current.delete(dirPath)
-    }
-  }, [sessionId, messageApi])
+  }, [updateTransfer])
 
   const fetchPathSuggestions = useCallback(async (value: string) => {
     if (!value) {
@@ -227,28 +189,19 @@ export default function FileBrowser({
     setPathInput(value)
     setPathOptions([])
     submitPath(value)
-    // 延迟重置，确保 onBlur 不会触发
     setTimeout(() => {
       selectingRef.current = false
     }, 200)
   }, [submitPath])
 
-  const handlePathSubmit = async () => {
-    // 如果正在通过下拉框选择，不重复提交
+  const handlePathSubmit = () => {
     if (selectingRef.current) return
     submitPath(pathInput)
-  }
-
-  const handlePathBlur = () => {
-    if (selectingRef.current) return
-    handlePathSubmit()
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault()
-      // 如果下拉框开着，AutoComplete 的 onSelect 会处理，这里通过 selectingRef 拦截
-      // 如果下拉框没开，直接提交当前输入内容
       setTimeout(() => {
         if (!selectingRef.current) {
           handlePathSubmit()
@@ -257,99 +210,9 @@ export default function FileBrowser({
     }
   }
 
-  const handleUpload = async (targetDirPath?: string) => {
-    const uploadPath = targetDirPath || currentPath
-    const localPath = await window.api.app.pickFile({ title: '选择文件' })
-    if (!localPath) return
-    const fileName = localPath.split('/').pop() || ''
-    const remotePath = uploadPath === '/' ? `/${fileName}` : `${uploadPath}/${fileName}`
-    const id = `upload_${++transferIdCounter}`
-
-    setTransferPanelCollapsed(false)
-    setTransfers((prev) => [...prev, {
-      id, fileName, direction: 'upload', progress: 0, speed: 0, status: 'transferring', remotePath, startTime: Date.now(),
-    }])
-
-    try {
-      await window.api.files.upload(sessionId, localPath, remotePath, id)
-      setTransfers((prev) => prev.map((t) => t.id === id ? { ...t, progress: 100, speed: 0, status: 'completed' } : t))
-      messageApi.success('上传成功')
-      
-      // 刷新目标目录
-      if (uploadPath === currentPath) {
-        loadFiles(currentPath)
-      } else {
-        setChildrenMap((prev) => {
-          const next = { ...prev }
-          delete next[uploadPath]
-          return next
-        })
-        setLoadedKeys((prev) => prev.filter(k => k !== uploadPath))
-      }
-    } catch (err) {
-      setTransfers((prev) => prev.map((t) => t.id === id ? { ...t, speed: 0, status: 'error' } : t))
-      messageApi.error(`上传失败: ${err instanceof Error ? err.message : '未知错误'}`)
-    }
-  }
-
-  const handleDownload = async (file: FileInfo) => {
-    const localPath = await window.api.app.saveFile({ title: '保存文件', defaultPath: file.name })
-    if (!localPath) return
-    const id = `download_${++transferIdCounter}`
-
-    setTransferPanelCollapsed(false)
-    setTransfers((prev) => [...prev, {
-      id, fileName: file.name, direction: 'download', progress: 0, speed: 0, status: 'transferring', remotePath: file.path, startTime: Date.now(),
-    }])
-
-    try {
-      await window.api.files.download(sessionId, file.path, localPath, id)
-      setTransfers((prev) => prev.map((t) => t.id === id ? { ...t, progress: 100, speed: 0, status: 'completed' } : t))
-      messageApi.success('下载成功')
-    } catch (err) {
-      setTransfers((prev) => prev.map((t) => t.id === id ? { ...t, speed: 0, status: 'error' } : t))
-      messageApi.error(`下载失败: ${err instanceof Error ? err.message : '未知错误'}`)
-    }
-  }
-
   const handleCancelTransfer = async (id: string) => {
     await window.api.files.cancel(id)
-    setTransfers((prev) => prev.map((t) => t.id === id ? { ...t, speed: 0, status: 'error' } : t))
-  }
-
-  const handleDelete = async (file: FileInfo) => {
-    modal.confirm({
-      title: '删除确认',
-      content: `确定要删除 "${file.name}" 吗？`,
-      okText: '删除',
-      okType: 'danger',
-      cancelText: '取消',
-      centered: true,
-      onOk: async () => {
-        try {
-          await window.api.files.delete(sessionId, file.path)
-          messageApi.success('已删除')
-          
-          // 判断删除的是否是当前目录下的文件
-          const lastSlash = file.path.lastIndexOf('/')
-          const parentDir = lastSlash === 0 ? '/' : file.path.slice(0, lastSlash)
-          
-          if (parentDir === currentPath) {
-            loadFiles(currentPath)
-          } else {
-            // 如果是子目录下的文件，刷新该子目录的缓存
-            setChildrenMap((prev) => {
-              const next = { ...prev }
-              delete next[parentDir]
-              return next
-            })
-            setLoadedKeys((prev) => prev.filter(k => k !== parentDir))
-          }
-        } catch (err) {
-          messageApi.error(`删除失败: ${err instanceof Error ? err.message : '未知错误'}`)
-        }
-      },
-    })
+    updateTransfer(id, { speed: 0, status: 'error' })
   }
 
   const handleRename = (file: FileInfo) => {
@@ -374,47 +237,11 @@ export default function FileBrowser({
     try {
       await window.api.files.rename(sessionId, file.path, newPath)
       messageApi.success('重命名成功')
-      // 更新 files 列表
-      setFiles((prev) => prev.map((f) =>
-        f.path === file.path ? { ...f, name: editingValue, path: newPath } : f
-      ))
-      // 更新 childrenMap（如果文件在展开的子目录中）
-      setChildrenMap((prev) => {
-        const next = { ...prev }
-        for (const [dirPath, fileList] of Object.entries(next)) {
-          next[dirPath] = fileList.map((f) =>
-            f.path === file.path ? { ...f, name: editingValue, path: newPath } : f
-          )
-        }
-        return next
-      })
-      // 更新 expandedKeys 和 selectedKeys 中的旧路径
-      setExpandedKeys((prev) => prev.map((k) => k === file.path ? newPath : k))
-      setSelectedKeys((prev) => prev.map((k) => k === file.path ? newPath : k))
+      loadFiles(currentPath)
     } catch (err) {
       messageApi.error(`重命名失败: ${err instanceof Error ? err.message : '未知错误'}`)
     }
     setEditingKey(null)
-  }
-
-  const handleRenameCancel = () => {
-    setEditingKey(null)
-  }
-
-  const handleEdit = (file: FileInfo) => {
-    const sizeInMB = file.size / (1024 * 1024)
-    if (sizeInMB > 5) {
-      messageApi.warning(`文件过大 (${sizeInMB.toFixed(1)}MB)，超过 5MB 限制，无法在线编辑`)
-      return
-    }
-    onEditFile(file)
-  }
-
-  const handleCreate = (dirPath: string) => {
-    setCreatePath(dirPath)
-    setCreateType('folder')
-    setCreateName('')
-    setShowCreateModal(true)
   }
 
   const handleCreateConfirm = async () => {
@@ -433,17 +260,10 @@ export default function FileBrowser({
       messageApi.success('创建成功')
       setShowCreateModal(false)
       
-      // 刷新列表
       if (createPath === currentPath) {
         loadFiles(currentPath)
       } else {
-        // 如果是在子目录中创建，清除该目录缓存以触发重新加载
-        setChildrenMap((prev) => {
-          const next = { ...prev }
-          delete next[createPath]
-          return next
-        })
-        setLoadedKeys((prev) => prev.filter(k => k !== createPath))
+        setLoadedKeys(sessionId, (prev) => prev.filter(k => k !== createPath))
       }
     } catch (err) {
       messageApi.error(`创建失败: ${err instanceof Error ? err.message : '未知错误'}`)
@@ -455,17 +275,28 @@ export default function FileBrowser({
   const contextMenuItems = (file: FileInfo) => {
     const items: any[] = []
     if (file.isDirectory) {
-      items.push({ key: 'create', label: '新建', icon: <PlusOutlined />, onClick: () => handleCreate(file.path) })
+      items.push({ key: 'create', label: '新建', icon: <PlusOutlined />, onClick: () => {
+        setCreatePath(file.path); setCreateType('folder'); setCreateName(''); setShowCreateModal(true);
+      }})
       items.push({ key: 'upload-to', label: '上传', icon: <UploadOutlined />, onClick: () => handleUpload(file.path) })
       items.push({ type: 'divider' as const })
     }
     items.push({ key: 'rename', label: '重命名', icon: <EditOutlined />, onClick: () => handleRename(file) })
     if (!file.isDirectory) {
-      items.push({ key: 'edit', label: '编辑', icon: <FileTextOutlined />, onClick: () => handleEdit(file) })
+      items.push({ key: 'edit', label: '编辑', icon: <FileTextOutlined />, onClick: () => onEditFile(file) })
       items.push({ key: 'download', label: '下载', icon: <DownloadOutlined />, onClick: () => handleDownload(file) })
     }
     items.push({ type: 'divider' as const })
-    items.push({ key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true, onClick: () => handleDelete(file) })
+    items.push({ key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true, onClick: () => {
+      modal.confirm({
+        title: '删除确认',
+        content: `确定要删除 "${file.name}" 吗？`,
+        okText: '删除',
+        okType: 'danger',
+        cancelText: '取消',
+        onOk: () => handleDelete(file)
+      })
+    }})
     return items
   }
 
@@ -488,7 +319,7 @@ export default function FileBrowser({
               onChange={(e) => setEditingValue(e.target.value)}
               onPressEnter={handleRenameSubmit}
               onBlur={handleRenameSubmit}
-              onKeyDown={(e) => { if (e.key === 'Escape') handleRenameCancel() }}
+              onKeyDown={(e) => { if (e.key === 'Escape') setEditingKey(null) }}
               autoFocus
               className="file-rename-input"
             />
@@ -525,31 +356,15 @@ export default function FileBrowser({
     }
   }
 
-  // 优化：使用 useMemo 缓存树结构，避免输入路径时由于全量重渲染导致的卡顿
   const treeData = useMemo((): DataNode[] => {
-    const rootChildren: DataNode[] = []
-    for (const file of files) {
-      rootChildren.push(buildFileNode(file))
-    }
-
+    const rootChildren: DataNode[] = files.map(buildFileNode)
     const rootMenuItems: any[] = [
-      { key: 'refresh', label: '刷新', icon: <ReloadOutlined />, onClick: () => { setChildrenMap({}); setLoadedKeys([]); loadFiles(currentPath) } },
+      { key: 'refresh', label: '刷新', icon: <ReloadOutlined />, onClick: () => { loadFiles(currentPath) } },
       { type: 'divider' as const },
-      { key: 'create', label: '新建', icon: <PlusOutlined />, onClick: () => handleCreate(currentPath) },
+      { key: 'create', label: '新建', icon: <PlusOutlined />, onClick: () => {
+        setCreatePath(currentPath); setCreateType('folder'); setCreateName(''); setShowCreateModal(true);
+      }},
     ]
-    if (currentPath !== '/') {
-      rootMenuItems.push({ type: 'divider' as const })
-      rootMenuItems.push({ key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true, onClick: async () => {
-        modal.confirm({
-          title: '删除确认', content: `确定要删除当前目录 "${dirName}" 吗？`, okText: '删除', okType: 'danger', cancelText: '取消',
-          centered: true,
-          onOk: async () => {
-            try { await window.api.files.delete(sessionId, currentPath); messageApi.success('已删除'); const p = currentPath.split('/').filter(Boolean); p.pop(); onPathChange(p.length === 0 ? '/' : `/${p.join('/')}`) }
-            catch (err) { messageApi.error(`删除失败: ${err instanceof Error ? err.message : '未知错误'}`) }
-          },
-        })
-      }})
-    }
 
     return [{
       key: ROOT_KEY,
@@ -569,7 +384,7 @@ export default function FileBrowser({
   }, [files, childrenMap, currentPath, dirName, expandedKeys, editingKey, editingValue])
 
   const handleExpand: TreeProps['onExpand'] = (expandedKeysValue) => {
-    setExpandedKeys(expandedKeysValue as string[])
+    setStoreExpandedKeys(sessionId, expandedKeysValue as string[])
   }
 
   const handleLoadData: TreeProps['loadData'] = async (node) => {
@@ -579,35 +394,18 @@ export default function FileBrowser({
       || Object.values(childrenMap).flat().find((f) => f.path === key)
     if (file?.isDirectory) {
       await loadDirChildren(file.path)
-      setLoadedKeys((prev) => [...prev, key])
+      setLoadedKeys(sessionId, (prev) => [...prev, key])
     }
-  }
-
-  const handleSelect: TreeProps['onSelect'] = (selectedKeysValue) => {
-    const key = selectedKeysValue[0] as string
-    if (!key || key === ROOT_KEY || key === PARENT_KEY) return
-    setSelectedKeys(selectedKeysValue)
   }
 
   const handleDoubleClick: TreeProps['onDoubleClick'] = (_info, node) => {
     const key = node.key as string
-
-    if (key === ROOT_KEY) {
-      if (currentPath !== '/') {
-        const parts = currentPath.split('/').filter(Boolean)
-        parts.pop()
-        onPathChange(parts.length === 0 ? '/' : `/${parts.join('/')}`)
-      }
-      return
-    }
-
-    if (key === PARENT_KEY) {
+    if (key === ROOT_KEY || key === PARENT_KEY) {
       const parts = currentPath.split('/').filter(Boolean)
       parts.pop()
       onPathChange(parts.length === 0 ? '/' : `/${parts.join('/')}`)
       return
     }
-
     const file = files.find((f) => f.path === key)
       || Object.values(childrenMap).flat().find((f) => f.path === key)
     if (file?.isDirectory) onPathChange(file.path)
@@ -630,15 +428,15 @@ export default function FileBrowser({
               }} disabled={isRoot} />
             </Tooltip>
             <Tooltip title="刷新">
-              <Button size="small" type="text" icon={<ReloadOutlined />} onClick={() => {
-                setChildrenMap({}); setLoadedKeys([]); loadFiles(currentPath)
-              }} />
+              <Button size="small" type="text" icon={<ReloadOutlined />} onClick={() => loadFiles(currentPath)} />
             </Tooltip>
             <Tooltip title="上传">
               <Button size="small" type="text" icon={<UploadOutlined />} onClick={() => handleUpload()} />
             </Tooltip>
             <Tooltip title="新建">
-              <Button size="small" type="text" icon={<PlusOutlined />} onClick={() => handleCreate(currentPath)} />
+              <Button size="small" type="text" icon={<PlusOutlined />} onClick={() => {
+                setCreatePath(currentPath); setCreateType('folder'); setCreateName(''); setShowCreateModal(true);
+              }} />
             </Tooltip>
           </div>
         </div>
@@ -649,7 +447,7 @@ export default function FileBrowser({
             options={pathOptions}
             onChange={handlePathInputChange}
             onSelect={handlePathSelect}
-            onBlur={handlePathBlur}
+            onBlur={() => submitPath(pathInput)}
             onKeyDown={handleKeyDown}
             placeholder="输入路径并回车"
           />
@@ -668,7 +466,7 @@ export default function FileBrowser({
               selectedKeys={selectedKeys}
               loadedKeys={loadedKeys}
               onExpand={handleExpand}
-              onSelect={handleSelect}
+              onSelect={(keys) => setSelectedKeys(keys)}
               onDoubleClick={handleDoubleClick}
               loadData={handleLoadData}
               showLine={false}
@@ -684,63 +482,11 @@ export default function FileBrowser({
         </Spin>
       </div>
 
-      <div className="transfer-panel">
-        <div
-          className="transfer-panel-header"
-          onClick={() => setTransferPanelCollapsed(!transferPanelCollapsed)}
-        >
-          <Space size={6}>
-            {activeTransfers.length > 0 ? (
-              <Spin size="small" style={{ scale: '0.8' }} />
-            ) : transfers.length > 0 ? (
-              <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 12 }} />
-            ) : (
-              <DownloadOutlined style={{ color: '#8e8e93', fontSize: 12 }} />
-            )}
-            <span className="transfer-panel-title">
-              传输队列 {activeTransfers.length > 0 ? `(${activeTransfers.length})` : ''}
-            </span>
-          </Space>
-          <div style={{ fontSize: '10px', color: '#bfbfbf' }}>
-            {transferPanelCollapsed ? <CaretUpOutlined /> : <CaretDownIcon />}
-          </div>
-        </div>
-        {!transferPanelCollapsed && (
-          <div className="transfer-panel-body">
-            {transfers.length === 0 ? (
-              <div className="transfer-panel-empty" style={{ padding: '20px 0', textAlign: 'center', fontSize: '12px', color: '#bfbfbf' }}>暂无传输任务</div>
-            ) : (
-              [...transfers].reverse().map((t) => (
-                <div key={t.id} className="transfer-item">
-                  <div className="transfer-item-info" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <span style={{ flexShrink: 0 }}>
-                      {t.direction === 'upload' ? (
-                        <UploadOutlined style={{ color: '#1677ff', fontSize: '12px' }} />
-                      ) : (
-                        <DownloadOutlined style={{ color: '#52c41a', fontSize: '12px' }} />
-                      )}
-                    </span>
-                    <span className="transfer-item-name" style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.fileName}</span>
-                    <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {t.status === 'transferring' && (
-                        <>
-                          <span style={{ fontSize: '10px', color: '#8c8c8c' }}>{formatSpeed(t.speed)}</span>
-                          <Button type="text" size="small" icon={<CloseOutlined style={{ fontSize: '10px' }} />} onClick={(e) => { e.stopPropagation(); handleCancelTransfer(t.id) }} />
-                        </>
-                      )}
-                      {t.status === 'completed' && <CheckCircleOutlined style={{ color: '#52c41a', fontSize: '12px' }} />}
-                      {t.status === 'error' && <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: '12px' }} />}
-                    </div>
-                  </div>
-                  {t.status === 'transferring' && (
-                    <Progress percent={t.progress} size="small" showInfo={false} strokeWidth={2} strokeColor="#1677ff" style={{ margin: 0, lineHeight: 1 }} />
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
+      <TransferPanel 
+        collapsed={transferPanelCollapsed} 
+        onToggle={() => setTransferPanelCollapsed(!transferPanelCollapsed)}
+        onCancel={handleCancelTransfer}
+      />
 
       <Modal
         title="新建"
@@ -748,33 +494,11 @@ export default function FileBrowser({
         onCancel={() => setShowCreateModal(false)}
         width={360}
         centered
-        destroyOnClose
-        styles={{
-          content: {
-            padding: 0,
-          },
-          body: {
-            padding: '20px 24px',
-          }
-        }}
         footer={(
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'flex-end', 
-            alignItems: 'center',
-            backgroundColor: 'var(--bg-secondary)',
-            padding: '10px 16px',
-            borderTop: '1px solid var(--border-color)',
-            borderBottomLeftRadius: '8px',
-            borderBottomRightRadius: '8px',
-          }}>
+          <div className="modal-footer">
             <Space>
-              <Button onClick={() => setShowCreateModal(false)}>
-                取消
-              </Button>
-              <Button type="primary" onClick={handleCreateConfirm} loading={creating}>
-                创建
-              </Button>
+              <Button onClick={() => setShowCreateModal(false)}>取消</Button>
+              <Button type="primary" onClick={handleCreateConfirm} loading={creating}>创建</Button>
             </Space>
           </div>
         )}
@@ -784,13 +508,10 @@ export default function FileBrowser({
             <Select
               value={createType}
               onChange={(value: 'folder' | 'file') => setCreateType(value)}
-              options={[
-                { value: 'folder', label: '文件夹' },
-                { value: 'file', label: '文件' },
-              ]}
+              options={[{ value: 'folder', label: '文件夹' }, { value: 'file', label: '文件' }]}
             />
           </Form.Item>
-          <Form.Item label="名称" required style={{ marginBottom: 0 }}>
+          <Form.Item label="名称" required>
             <Input
               placeholder={createType === 'folder' ? '请输入文件夹名称' : '请输入文件名称'}
               value={createName}
@@ -811,10 +532,4 @@ function formatSize(bytes: number): string {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
-}
-
-function formatSpeed(speed: number): string {
-  if (speed < 1) return '<1 KB/s'
-  if (speed < 1024) return `${Math.round(speed)} KB/s`
-  return `${(speed / 1024).toFixed(1)} MB/s`
 }
