@@ -9,7 +9,7 @@ interface ConnectionManagerProps {
   open: boolean
   onClose: () => void
   onConnect: (config: SSHConnectionConfig) => void
-  onEdit: (config: SSHConnectionConfig) => void
+  onEdit: (config: SSHConnectionConfig | null) => void
 }
 
 const ConnectionManager: React.FC<ConnectionManagerProps> = ({
@@ -139,7 +139,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
           <Space>
             <Button
               icon={<PlusOutlined />}
-              onClick={() => onEdit({} as SSHConnectionConfig)}
+              onClick={() => onEdit(null)}
             >
               新建
             </Button>
@@ -202,15 +202,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
               description="暂无连接"
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               style={{ marginTop: '60px' }}
-            >
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => onEdit({} as SSHConnectionConfig)}
-              >
-                新建连接
-              </Button>
-            </Empty>
+            />
           ),
         }}
       />

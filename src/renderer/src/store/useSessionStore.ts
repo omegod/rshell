@@ -30,6 +30,12 @@ interface SessionState {
   updateChildren: (sessionId: string, dirPath: string, children: FileInfo[]) => void
   setLoadedKeys: (sessionId: string, keys: string[] | ((prev: string[]) => string[])) => void
   setExpandedKeys: (sessionId: string, keys: string[]) => void
+
+  // Diff update actions
+  upsertFile: (sessionId: string, file: FileInfo) => void
+  removeFile: (sessionId: string, filePath: string) => void
+  upsertChildFile: (sessionId: string, dirPath: string, file: FileInfo) => void
+  removeChildFile: (sessionId: string, dirPath: string, filePath: string) => void
   
   // Transfer Actions
   addTransfer: (transfer: TransferItem) => void
@@ -101,6 +107,70 @@ export const useSessionStore = create<SessionState>((set) => ({
     }
   })),
 
+  upsertFile: (sessionId, file) => set((state) => {
+    const prev = state.sessions[sessionId]
+    if (!prev) return state
+    const exists = prev.files.findIndex((f) => f.path === file.path)
+    const next = exists >= 0
+      ? prev.files.map((f) => (f.path === file.path ? file : f))
+      : [...prev.files, file]
+    next.sort(sortFiles)
+    return {
+      sessions: {
+        ...state.sessions,
+        [sessionId]: { ...prev, files: next }
+      }
+    }
+  }),
+
+  removeFile: (sessionId, filePath) => set((state) => {
+    const prev = state.sessions[sessionId]
+    if (!prev) return state
+    return {
+      sessions: {
+        ...state.sessions,
+        [sessionId]: { ...prev, files: prev.files.filter((f) => f.path !== filePath) }
+      }
+    }
+  }),
+
+  upsertChildFile: (sessionId, dirPath, file) => set((state) => {
+    const prev = state.sessions[sessionId]
+    if (!prev) return state
+    const cached = prev.childrenMap[dirPath]
+    if (!cached) return state
+    const exists = cached.findIndex((f) => f.path === file.path)
+    const next = exists >= 0
+      ? cached.map((f) => (f.path === file.path ? file : f))
+      : [...cached, file]
+    next.sort(sortFiles)
+    return {
+      sessions: {
+        ...state.sessions,
+        [sessionId]: {
+          ...prev,
+          childrenMap: { ...prev.childrenMap, [dirPath]: next }
+        }
+      }
+    }
+  }),
+
+  removeChildFile: (sessionId, dirPath, filePath) => set((state) => {
+    const prev = state.sessions[sessionId]
+    if (!prev) return state
+    const cached = prev.childrenMap[dirPath]
+    if (!cached) return state
+    return {
+      sessions: {
+        ...state.sessions,
+        [sessionId]: {
+          ...prev,
+          childrenMap: { ...prev.childrenMap, [dirPath]: cached.filter((f) => f.path !== filePath) }
+        }
+      }
+    }
+  }),
+
   addTransfer: (transfer) => set((state) => ({
     transfers: [transfer, ...state.transfers]
   })),
@@ -113,3 +183,8 @@ export const useSessionStore = create<SessionState>((set) => ({
     transfers: state.transfers.filter((t) => t.status === 'transferring' || t.status === 'pending')
   }))
 }))
+
+function sortFiles(a: FileInfo, b: FileInfo): number {
+  if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+  return a.name.localeCompare(b.name)
+}

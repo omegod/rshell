@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Modal, Form, Input, InputNumber, Select, Button, Space, message } from 'antd'
-import { SSHConnectionConfig } from '../../../shared/types'
+import { SSHConnectionConfig, Session } from '../../../shared/types'
 import { KeyOutlined, LockOutlined, UserOutlined, CloudOutlined } from '@ant-design/icons'
 
 interface ConnectionDialogProps {
@@ -21,6 +21,7 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
   const [form] = Form.useForm()
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [connecting, setConnecting] = useState(false)
   const [messageApi, contextHolder] = message.useMessage()
 
   useEffect(() => {
@@ -69,6 +70,7 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
   }
 
   const handleConnect = async () => {
+    setConnecting(true)
     try {
       const values = await form.validateFields()
 
@@ -92,17 +94,43 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
       }
 
       onConnect(config)
+
+      const configId = config.id
+      await new Promise<void>((resolve) => {
+        const onConnected = (e: Event) => {
+          const session = (e as CustomEvent).detail as Session
+          if (session.configId === configId) {
+            cleanup()
+            resolve()
+          }
+        }
+        const onError = (e: Event) => {
+          const { configId: id } = (e as CustomEvent).detail as { configId: string }
+          if (id === configId) {
+            cleanup()
+            resolve()
+          }
+        }
+        const cleanup = () => {
+          window.removeEventListener('sessions:connected', onConnected)
+          window.removeEventListener('sessions:connect-error', onError)
+        }
+        window.addEventListener('sessions:connected', onConnected)
+        window.addEventListener('sessions:connect-error', onError)
+      })
     } catch (err) {
       if (err instanceof Error) {
         messageApi.error(err.message)
       }
+    } finally {
+      setConnecting(false)
     }
   }
 
   const handleSave = async () => {
+    setSaving(true)
     try {
       const values = await form.validateFields()
-      setSaving(true)
 
       const config: SSHConnectionConfig = {
         id: editingConfig?.id || '',
@@ -180,7 +208,7 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
             <Button key="save" onClick={handleSave} loading={saving}>
               保存
             </Button>
-            <Button key="connect" type="primary" onClick={handleConnect}>
+            <Button key="connect" type="primary" onClick={handleConnect} loading={connecting}>
               连接
             </Button>
           </Space>

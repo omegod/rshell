@@ -7,3 +7,4 @@ dist
 .eslintcache
 .stylelintcache
 *.local
+.DS_Store

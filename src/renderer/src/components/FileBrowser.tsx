@@ -50,11 +50,17 @@ export default function FileBrowser({
     setLoadedKeys,
     setExpandedKeys: setStoreExpandedKeys,
     updateTransfer,
+    upsertFile,
+    removeFile,
+    upsertChildFile,
+    removeChildFile,
   } = useSessionStore()
 
   const {
     loadFiles,
     loadDirChildren,
+    addFileItem,
+    addChildFileItem,
     handleUpload,
     handleDownload,
     handleDelete,
@@ -115,9 +121,12 @@ export default function FileBrowser({
   // 监听单个文件更新
   useEffect(() => {
     if (!updatedFile) return
-    const updateInList = (list: FileInfo[]) =>
-      list.map((f) => (f.path === updatedFile.path ? updatedFile : f))
-    setFiles(sessionId, updateInList(files))
+    upsertFile(sessionId, updatedFile)
+    Object.entries(childrenMap).forEach(([dirPath, children]) => {
+      if (children.some((f) => f.path === updatedFile.path)) {
+        upsertChildFile(sessionId, dirPath, updatedFile)
+      }
+    })
   }, [updatedFile, sessionId])
 
   // 监听真实传输进度
@@ -238,7 +247,16 @@ export default function FileBrowser({
     try {
       await window.api.files.rename(sessionId, file.path, newPath)
       messageApi.success('重命名成功')
-      loadFiles(currentPath)
+      if (parentDir === currentPath) {
+        removeFile(sessionId, file.path)
+        addFileItem(newPath)
+      } else {
+        if (childrenMap[parentDir]) {
+          removeChildFile(sessionId, parentDir, file.path)
+          addChildFileItem(newPath, parentDir)
+        }
+        setLoadedKeys(sessionId, (prev) => prev.filter(k => k !== parentDir))
+      }
     } catch (err) {
       messageApi.error(`重命名失败: ${err instanceof Error ? err.message : '未知错误'}`)
     }
@@ -260,10 +278,13 @@ export default function FileBrowser({
       }
       messageApi.success('创建成功')
       setShowCreateModal(false)
-      
+
       if (createPath === currentPath) {
-        loadFiles(currentPath)
+        addFileItem(newPath)
       } else {
+        if (childrenMap[createPath]) {
+          addChildFileItem(newPath, createPath)
+        }
         setLoadedKeys(sessionId, (prev) => prev.filter(k => k !== createPath))
       }
     } catch (err) {
@@ -429,7 +450,14 @@ export default function FileBrowser({
               }} disabled={isRoot} />
             </Tooltip>
             <Tooltip title="刷新">
-              <Button size="small" type="text" icon={<ReloadOutlined />} onClick={() => loadFiles(currentPath)} />
+              <Button size="small" type="text" icon={<ReloadOutlined />} onClick={async () => {
+                await loadFiles(currentPath)
+                for (const key of expandedKeys) {
+                  if (key !== ROOT_KEY && key !== currentPath && childrenMap[key]) {
+                    loadDirChildren(key)
+                  }
+                }
+              }} />
             </Tooltip>
             <Tooltip title="上传">
               <Button size="small" type="text" icon={<UploadOutlined />} onClick={() => handleUpload()} />

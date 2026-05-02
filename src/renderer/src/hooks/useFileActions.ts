@@ -9,12 +9,17 @@ export function useFileActions(sessionId: string) {
     setFiles,
     updateChildren,
     setLoadedKeys,
+    upsertFile,
+    removeFile,
+    upsertChildFile,
+    removeChildFile,
     addTransfer,
     updateTransfer,
   } = useSessionStore()
 
   const sessionState = sessions[sessionId] || { currentPath: '~', files: [], childrenMap: {}, loadedKeys: [] }
   const currentPath = sessionState.currentPath
+  const childrenMap = sessionState.childrenMap
   const loadingDirs = useRef<Set<string>>(new Set())
 
   const loadFiles = useCallback(async (path: string) => {
@@ -42,6 +47,26 @@ export function useFileActions(sessionId: string) {
     }
   }, [sessionId, updateChildren])
 
+  const addFileItem = useCallback(async (filePath: string) => {
+    try {
+      const stat = await window.api.files.stat(sessionId, filePath)
+      upsertFile(sessionId, stat)
+    } catch {
+      const lastSlash = filePath.lastIndexOf('/')
+      const parentDir = lastSlash === 0 ? '/' : filePath.slice(0, lastSlash)
+      if (parentDir === currentPath) loadFiles(currentPath)
+    }
+  }, [sessionId, currentPath, upsertFile, loadFiles])
+
+  const addChildFileItem = useCallback(async (filePath: string, dirPath: string) => {
+    try {
+      const stat = await window.api.files.stat(sessionId, filePath)
+      upsertChildFile(sessionId, dirPath, stat)
+    } catch {
+      setLoadedKeys(sessionId, (prev) => prev.filter(k => k !== dirPath))
+    }
+  }, [sessionId, upsertChildFile, setLoadedKeys])
+
   const handleUpload = useCallback(async (targetDirPath?: string) => {
     const uploadPath = targetDirPath || currentPath
     const localPath = await window.api.app.pickFile({ title: '选择文件' })
@@ -65,9 +90,12 @@ export function useFileActions(sessionId: string) {
       await window.api.files.upload(sessionId, localPath, remotePath, id)
       updateTransfer(id, { progress: 100, speed: 0, status: 'completed' })
       message.success('上传成功')
-      
+
       if (uploadPath === currentPath) {
-        loadFiles(currentPath)
+        addFileItem(remotePath)
+      } else if (childrenMap[uploadPath]) {
+        addChildFileItem(remotePath, uploadPath)
+        setLoadedKeys(sessionId, (prev) => prev.filter(k => k !== uploadPath))
       } else {
         setLoadedKeys(sessionId, (prev) => prev.filter(k => k !== uploadPath))
       }
@@ -75,7 +103,7 @@ export function useFileActions(sessionId: string) {
       updateTransfer(id, { speed: 0, status: 'error' })
       message.error(`上传失败: ${err instanceof Error ? err.message : '未知错误'}`)
     }
-  }, [sessionId, currentPath, addTransfer, updateTransfer, loadFiles, setLoadedKeys])
+  }, [sessionId, currentPath, childrenMap, addTransfer, updateTransfer, addFileItem, addChildFileItem, loadFiles])
 
   const handleDownload = useCallback(async (file: FileInfo) => {
     const localPath = await window.api.app.saveFile({ title: '保存文件', defaultPath: file.name })
@@ -107,23 +135,28 @@ export function useFileActions(sessionId: string) {
     try {
       await window.api.files.delete(sessionId, file.path)
       message.success('已删除')
-      
+
       const lastSlash = file.path.lastIndexOf('/')
       const parentDir = lastSlash === 0 ? '/' : file.path.slice(0, lastSlash)
-      
+
       if (parentDir === currentPath) {
-        loadFiles(currentPath)
+        removeFile(sessionId, file.path)
       } else {
+        if (childrenMap[parentDir]) {
+          removeChildFile(sessionId, parentDir, file.path)
+        }
         setLoadedKeys(sessionId, (prev) => prev.filter(k => k !== parentDir))
       }
     } catch (err) {
       message.error(`删除失败: ${err instanceof Error ? err.message : '未知错误'}`)
     }
-  }, [sessionId, currentPath, loadFiles, setLoadedKeys])
+  }, [sessionId, currentPath, childrenMap, removeFile, removeChildFile, setLoadedKeys])
 
   return {
     loadFiles,
     loadDirChildren,
+    addFileItem,
+    addChildFileItem,
     handleUpload,
     handleDownload,
     handleDelete,

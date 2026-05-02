@@ -22,6 +22,8 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
   const [stats, setStats] = useState<SystemStats | null>(null)
   const prevNetRef = useRef<{ rx: number; tx: number; time: number } | null>(null)
   const [netSpeed, setNetSpeed] = useState<{ up: number; down: number }>({ up: 0, down: 0 })
+  const isActiveRef = useRef(isActive)
+  isActiveRef.current = isActive
 
   useEffect(() => {
     if (!terminalRef.current) return
@@ -91,6 +93,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     xterm.onResize(handleResize)
 
     const handleTerminalInput = (e: Event) => {
+      if (!isActiveRef.current) return
       const { sessionId: eventSessionId, data } = (e as CustomEvent).detail
       if (eventSessionId === sessionId) {
         xterm.write(data)
@@ -98,6 +101,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     }
 
     const handleTerminalClose = (e: Event) => {
+      if (!isActiveRef.current) return
       const { sessionId: eventSessionId } = (e as CustomEvent).detail
       if (eventSessionId === sessionId) {
         xterm.write('\r\n\x1b[31m[Connection closed]\x1b[0m\r\n')
@@ -109,7 +113,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
 
     // 定时获取系统状态
     const statsInterval = setInterval(async () => {
-      if (!isActive) return
+      if (!isActiveRef.current) return
       try {
         const newStats = await window.api.sessions.stats(sessionId)
         setStats(newStats)
@@ -133,6 +137,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
 
     let fitTimeout: ReturnType<typeof setTimeout>
     const resizeObserver = new ResizeObserver(() => {
+      if (!isActiveRef.current) return
       clearTimeout(fitTimeout)
       fitTimeout = setTimeout(() => {
         try {
@@ -164,7 +169,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
       xtermRef.current = null
       fitAddonRef.current = null
     }
-  }, [sessionId, isActive])
+  }, [sessionId])
 
   useEffect(() => {
     if (xtermRef.current && fitAddonRef.current) {
@@ -178,15 +183,14 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
   }, [fontSize])
 
   useEffect(() => {
-    if (isActive && fitAddonRef.current) {
+    if (isActive && xtermRef.current) {
       const timer = setTimeout(() => {
         try {
-          fitAddonRef.current?.fit()
           xtermRef.current?.focus()
         } catch {
           // ignore
         }
-      }, 50)
+      }, 100)
       return () => clearTimeout(timer)
     }
   }, [isActive])
