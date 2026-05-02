@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Modal, Table, Button, Space, message, Empty, Tooltip } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
-import { SSHConnectionConfig } from '../../shared/types'
+import { SSHConnectionConfig } from '../../../shared/types'
 
 interface ConnectionManagerProps {
   open: boolean

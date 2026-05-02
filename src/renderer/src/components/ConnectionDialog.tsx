@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Modal, Form, Input, InputNumber, Select, Button, Space, message } from 'antd'
-import { SSHConnectionConfig } from '../../shared/types'
+import { SSHConnectionConfig } from '../../../shared/types'
 import { KeyOutlined, LockOutlined, UserOutlined, CloudOutlined } from '@ant-design/icons'
 
 interface ConnectionDialogProps {

@@ -1,7 +1,7 @@
 import React from 'react'
 import { Tabs, Button, Tooltip, Dropdown } from 'antd'
 import { PlusOutlined, SettingOutlined, CloseOutlined } from '@ant-design/icons'
-import { Session } from '../../shared/types'
+import { Session } from '../../../shared/types'
 
 interface TabBarProps {
   sessions: Session[]

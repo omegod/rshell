@@ -8,6 +8,7 @@ import {
   FolderOpenOutlined,
   FileOutlined,
   UploadOutlined,
+  DownloadOutlined,
   DeleteOutlined,
   ReloadOutlined,
   RollbackOutlined,
@@ -18,7 +19,7 @@ import {
   DownOutlined,
   RightOutlined,
 } from '@ant-design/icons'
-import { FileInfo } from '../../shared/types'
+import { FileInfo } from '../../../shared/types'
 import type { DataNode, TreeProps } from 'antd/es/tree'
 import { useSessionStore } from '../store/useSessionStore'
 import { useFileActions } from '../hooks/useFileActions'
@@ -78,7 +79,7 @@ export default function FileBrowser({
   const [pathOptions, setPathOptions] = useState<{ value: string; label: React.ReactNode }[]>([])
   const [messageApi, contextHolder] = message.useMessage()
   const [modal, modalContextHolder] = Modal.useModal()
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const selectingRef = useRef(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
@@ -142,8 +143,8 @@ export default function FileBrowser({
     try {
       const list = await window.api.files.list(sessionId, parentDir)
       const options = list
-        .filter((f) => f.isDirectory && f.name.startsWith(prefix))
-        .map((f) => {
+        .filter((f: FileInfo) => f.isDirectory && f.name.startsWith(prefix))
+        .map((f: FileInfo) => {
           const basePath = parentDir === '/' ? '' : parentDir
           const fullPath = `${basePath}/${f.name}`
           return {

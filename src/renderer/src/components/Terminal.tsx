@@ -6,7 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { DashboardOutlined, CloudDownloadOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import '@xterm/xterm/css/xterm.css'
-import { SystemStats } from '../../shared/types'
+import { SystemStats } from '../../../shared/types'
 
 interface TerminalProps {
   sessionId: string

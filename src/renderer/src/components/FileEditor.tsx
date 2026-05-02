@@ -7,7 +7,7 @@ import { python } from '@codemirror/lang-python'
 import { html } from '@codemirror/lang-html'
 import { json } from '@codemirror/lang-json'
 import { sql } from '@codemirror/lang-sql'
-import { FileInfo } from '../../shared/types'
+import { FileInfo } from '../../../shared/types'
 
 interface FileEditorProps {
   open: boolean
