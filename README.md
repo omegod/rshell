@@ -6,6 +6,11 @@ RShell 是一款基于 Electron、React 19 和 Zustand 构建的现代化、高�
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-macOS%20|%20Windows%20|%20Linux-lightgrey.svg)
 
+## 📸 预览
+
+![RShell 终端与文件管理](docs/images/image.png)
+![RShell 文件编辑](docs/images/image1.png)
+
 ## ✨ 特性
 
 -   🚀 **原生级性能**：基于 `electron-vite` 构建，响应极速，内存占用低。
