@@ -10,6 +10,8 @@ import ConnectionManager from './components/ConnectionManager'
 import FileEditor from './components/FileEditor'
 import SettingsDialog from './components/SettingsDialog'
 
+import { useConnectionStore } from './store/useConnectionStore'
+
 const { Content } = Layout
 
 interface SessionState {
@@ -166,6 +168,8 @@ function App() {
     messageApi.success('设置已保存')
   }
 
+  const addConnection = useConnectionStore((state) => state.addConnection)
+
   return (
     <ConfigProvider
       theme={{
@@ -294,7 +298,8 @@ function App() {
         onConnect={handleConnect}
         onSave={async (config) => {
           try {
-            await window.api.connections.save(config)
+            const saved = await window.api.connections.save(config)
+            addConnection(saved)
             messageApi.success('保存成功')
           } catch (err) {
             messageApi.error(`保存失败: ${err instanceof Error ? err.message : '未知错误'}`)

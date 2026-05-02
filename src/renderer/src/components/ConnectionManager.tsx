@@ -3,6 +3,8 @@ import { Modal, Table, Button, Space, message, Empty, Tooltip } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { SSHConnectionConfig } from '../../../shared/types'
 
+import { useConnectionStore } from '../store/useConnectionStore'
+
 interface ConnectionManagerProps {
   open: boolean
   onClose: () => void
@@ -16,32 +18,15 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
   onConnect,
   onEdit,
 }) => {
-  const [connections, setConnections] = useState<SSHConnectionConfig[]>([])
-  const [loading, setLoading] = useState(false)
+  const { connections, loading, fetchConnections, removeConnection } = useConnectionStore()
   const [connectingId, setConnectingId] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [messageApi, contextHolder] = message.useMessage()
   const [modal, modalContextHolder] = Modal.useModal()
 
-  const loadConnections = async () => {
-    setLoading(true)
-    try {
-      const list = await window.api.connections.list()
-      setConnections(list)
-      // 如果列表不为空且没选中，默认选第一个
-      if (list.length > 0 && !selectedId) {
-        setSelectedId(list[0].id)
-      }
-    } catch (err) {
-      messageApi.error('加载连接列表失败')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
     if (open) {
-      loadConnections()
+      fetchConnections()
       setConnectingId(null)
     }
 
@@ -54,6 +39,13 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
       window.removeEventListener('sessions:connect-error', handleConnectError)
     }
   }, [open])
+
+  // 设置默认选中
+  useEffect(() => {
+    if (connections.length > 0 && !selectedId) {
+      setSelectedId(connections[0].id)
+    }
+  }, [connections, selectedId])
 
   const handleDelete = async (id: string) => {
     const conn = connections.find(c => c.id === id)
@@ -71,8 +63,8 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
         try {
           await window.api.connections.delete(id)
           messageApi.success('已删除')
+          removeConnection(id)
           setSelectedId(null)
-          loadConnections()
         } catch (err) {
           messageApi.error('删除失败')
         }
