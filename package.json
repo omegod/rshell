@@ -1,6 +1,6 @@
 {
   "name": "rshell",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A remote shell tool with file browser and terminal",
   "main": "./out/main/main.js",
   "type": "module",
