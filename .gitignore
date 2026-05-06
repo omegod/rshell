@@ -8,3 +8,5 @@ dist
 .stylelintcache
 *.local
 .DS_Store
+build.keychain*
+*.p12
