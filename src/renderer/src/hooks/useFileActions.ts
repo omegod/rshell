@@ -32,6 +32,15 @@ export function useFileActions(sessionId: string) {
     }
   }, [sessionId, setFiles, setLoadedKeys])
 
+  const refreshFiles = useCallback(async (path: string) => {
+    try {
+      const fileList = await window.api.files.list(sessionId, path)
+      setFiles(sessionId, fileList)
+    } catch (err) {
+      message.error(`刷新文件列表失败: ${err instanceof Error ? err.message : '未知错误'}`)
+    }
+  }, [sessionId, setFiles])
+
   const loadDirChildren = useCallback(async (dirPath: string): Promise<FileInfo[]> => {
     if (loadingDirs.current.has(dirPath)) return []
     loadingDirs.current.add(dirPath)
@@ -140,7 +149,7 @@ export function useFileActions(sessionId: string) {
       const parentDir = lastSlash === 0 ? '/' : file.path.slice(0, lastSlash)
 
       if (parentDir === currentPath) {
-        removeFile(sessionId, file.path)
+        await refreshFiles(currentPath)
       } else {
         if (childrenMap[parentDir]) {
           removeChildFile(sessionId, parentDir, file.path)
@@ -150,7 +159,7 @@ export function useFileActions(sessionId: string) {
     } catch (err) {
       message.error(`删除失败: ${err instanceof Error ? err.message : '未知错误'}`)
     }
-  }, [sessionId, currentPath, childrenMap, removeFile, removeChildFile, setLoadedKeys])
+  }, [sessionId, currentPath, childrenMap, refreshFiles, removeChildFile, setLoadedKeys])
 
   return {
     loadFiles,

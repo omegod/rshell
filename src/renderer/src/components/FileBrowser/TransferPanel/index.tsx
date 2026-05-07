@@ -1,15 +1,17 @@
 import React from 'react'
 import { Space, Spin, Button, Progress } from 'antd'
-import { 
-  UploadOutlined, 
-  DownloadOutlined, 
-  CheckCircleOutlined, 
-  CloseCircleOutlined, 
-  CaretUpOutlined, 
+import {
+  UploadOutlined,
+  DownloadOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  CaretUpOutlined,
   CaretDownOutlined,
   CloseOutlined
 } from '@ant-design/icons'
-import { useSessionStore } from '../../store/useSessionStore'
+import { useSessionStore } from '../../../store/useSessionStore'
+
+import './index.css'
 
 interface TransferPanelProps {
   collapsed: boolean
@@ -17,10 +19,10 @@ interface TransferPanelProps {
   onCancel: (id: string) => void
 }
 
-export const TransferPanel: React.FC<TransferPanelProps> = ({ 
-  collapsed, 
-  onToggle, 
-  onCancel 
+export const TransferPanel: React.FC<TransferPanelProps> = ({
+  collapsed,
+  onToggle,
+  onCancel
 }) => {
   const transfers = useSessionStore((state) => state.transfers)
   const activeTransfers = transfers.filter((t) => t.status === 'transferring')

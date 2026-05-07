@@ -41,6 +41,7 @@ interface SessionState {
   addTransfer: (transfer: TransferItem) => void
   updateTransfer: (id: string, updates: Partial<TransferItem>) => void
   clearCompletedTransfers: () => void
+
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -110,17 +111,37 @@ export const useSessionStore = create<SessionState>((set) => ({
   upsertFile: (sessionId, file) => set((state) => {
     const prev = state.sessions[sessionId]
     if (!prev) return state
+
     const exists = prev.files.findIndex((f) => f.path === file.path)
-    const next = exists >= 0
-      ? prev.files.map((f) => (f.path === file.path ? file : f))
-      : [...prev.files, file]
-    next.sort(sortFiles)
-    return {
-      sessions: {
-        ...state.sessions,
-        [sessionId]: { ...prev, files: next }
+    if (exists >= 0) {
+      const next = prev.files.map((f) => (f.path === file.path ? file : f))
+      next.sort(sortFiles)
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: { ...prev, files: next }
+        }
       }
     }
+
+    for (const [dirPath, children] of Object.entries(prev.childrenMap)) {
+      const childIndex = children.findIndex((f) => f.path === file.path)
+      if (childIndex >= 0) {
+        const updatedChildren = children.map((f) => (f.path === file.path ? file : f))
+        updatedChildren.sort(sortFiles)
+        return {
+          sessions: {
+            ...state.sessions,
+            [sessionId]: {
+              ...prev,
+              childrenMap: { ...prev.childrenMap, [dirPath]: updatedChildren }
+            }
+          }
+        }
+      }
+    }
+
+    return state
   }),
 
   removeFile: (sessionId, filePath) => set((state) => {

@@ -7,7 +7,10 @@ import { python } from '@codemirror/lang-python'
 import { html } from '@codemirror/lang-html'
 import { json } from '@codemirror/lang-json'
 import { sql } from '@codemirror/lang-sql'
-import { FileInfo } from '../../../shared/types'
+import { FileInfo } from '../../../../shared/types'
+import { useSessionStore } from '../../store/useSessionStore'
+
+import './index.css'
 
 interface FileEditorProps {
   open: boolean
@@ -30,8 +33,8 @@ const FileEditor: React.FC<FileEditorProps> = ({
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [messageApi, contextHolder] = message.useMessage()
+  const upsertFile = useSessionStore((s) => s.upsertFile)
 
-  // 根据扩展名自动识别语言
   const extensions = useMemo(() => {
     const ext = fileName.split('.').pop()?.toLowerCase()
     const langs: any[] = []
@@ -51,7 +54,6 @@ const FileEditor: React.FC<FileEditorProps> = ({
 
   const [error, setError] = useState<string | null>(null)
 
-  // ... (inside loadFileContent)
   const loadFileContent = async () => {
     setLoading(true)
     setError(null)
@@ -72,13 +74,12 @@ const FileEditor: React.FC<FileEditorProps> = ({
       await window.api.files.write(sessionId, filePath, content)
       messageApi.success('保存成功')
 
-      if (onSave) {
-        try {
-          const updated = await window.api.files.stat(sessionId, filePath)
-          onSave(updated)
-        } catch (e) {
-          console.error('Failed to get stats', e)
-        }
+      try {
+        const updated = await window.api.files.stat(sessionId, filePath)
+        upsertFile(sessionId, updated)
+        onSave?.(updated)
+      } catch (e) {
+        console.error('Failed to get stats', e)
       }
     } catch (err) {
       messageApi.error(`保存失败: ${err instanceof Error ? err.message : '未知错误'}`)
@@ -121,7 +122,6 @@ const FileEditor: React.FC<FileEditorProps> = ({
       }}
     >
       {contextHolder}
-      {/* 顶部工具栏 */}
       <div style={{
         height: '44px',
         padding: '0 16px',
@@ -133,12 +133,12 @@ const FileEditor: React.FC<FileEditorProps> = ({
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
           <SaveOutlined style={{ color: 'var(--text-secondary)', fontSize: '16px' }} />
-          <span style={{ 
-            fontSize: '13px', 
-            fontWeight: 500, 
-            color: 'var(--text-primary)', 
-            whiteSpace: 'nowrap', 
-            overflow: 'hidden', 
+          <span style={{
+            fontSize: '13px',
+            fontWeight: 500,
+            color: 'var(--text-primary)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
             textOverflow: 'ellipsis',
             fontFamily: 'SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
           }}>
@@ -169,15 +169,14 @@ const FileEditor: React.FC<FileEditorProps> = ({
         </div>
       </div>
 
-      {/* 编辑器主体 */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <Spin spinning={loading} tip="加载中..." style={{ height: '100%', width: '100%' }} wrapperClassName="editor-spin-wrapper">
           {error ? (
-            <div style={{ 
-              height: '100%', 
-              display: 'flex', 
+            <div style={{
+              height: '100%',
+              display: 'flex',
               flexDirection: 'column',
-              alignItems: 'center', 
+              alignItems: 'center',
               justifyContent: 'center',
               padding: '20px',
               textAlign: 'center'
@@ -210,7 +209,6 @@ const FileEditor: React.FC<FileEditorProps> = ({
         </Spin>
       </div>
 
-      {/* 底部状态栏 */}
       <div style={{
         height: '24px',
         padding: '0 12px',

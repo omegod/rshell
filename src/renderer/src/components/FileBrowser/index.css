@@ -1,0 +1,218 @@
+.file-browser {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: #fafafa;
+}
+
+.file-browser-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: #ffffff;
+  flex-shrink: 0;
+}
+
+.file-browser-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.file-browser-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.file-browser-toolbar {
+  display: flex;
+  gap: 2px;
+}
+
+.file-browser-toolbar .ant-btn {
+  color: var(--text-secondary);
+  border: none;
+  background: transparent;
+}
+
+.file-browser-toolbar .ant-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+  color: var(--text-primary);
+}
+
+.file-browser-path-input {
+  width: 100%;
+}
+
+.file-browser-path-input .ant-select {
+  width: 100% !important;
+}
+
+.file-browser-path-input .ant-select-selector {
+  background-color: #f0f1f2 !important;
+  border: none !important;
+  border-radius: 4px !important;
+  height: 26px !important;
+  padding: 0 2px !important;
+  display: flex !important;
+  align-items: center !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.file-browser-path-input .ant-select-selector:hover {
+  background-color: #e6e8eb !important;
+}
+
+.file-browser-path-input .ant-select-selection-search {
+  inset-inline-start: 2px !important;
+  inset-inline-end: 2px !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.file-browser-path-input .ant-select-selection-search-input {
+  font-size: 12px !important;
+  height: 22px !important;
+  line-height: 22px !important;
+  padding: 0 2px !important;
+}
+
+.file-browser-path-input .ant-select-selection-item {
+  line-height: 26px !important;
+  padding: 0 2px !important;
+  font-size: 12px !important;
+}
+
+.file-browser-path-input .ant-select-selection-placeholder {
+  line-height: 26px !important;
+  padding-inline-start: 2px !important;
+  padding-inline-end: 2px !important;
+  font-size: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.file-browser-content {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.file-browser-content .ant-tree {
+  font-size: 13px;
+  background: transparent;
+}
+
+.file-browser-content .ant-tree-treenode {
+  padding: 0 !important;
+  width: 100%;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.file-browser-content .ant-tree-switcher {
+  width: 24px !important;
+  height: 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+
+.file-browser-content .ant-tree-switcher .ant-tree-switcher-icon {
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.file-browser-content .ant-tree-switcher .ant-tree-switcher-icon svg {
+  transform: none !important;
+}
+
+.file-browser-content .ant-tree-node-content-wrapper {
+  flex: 1;
+  min-width: 0;
+  padding: 0 !important;
+  border-radius: 0;
+  transition: background-color 0.1s ease;
+}
+
+.file-browser-content .ant-tree-node-content-wrapper:hover {
+  background-color: #f0f0f0 !important;
+}
+
+.file-browser-content .ant-tree-node-selected {
+  background-color: #e6f4ff !important;
+}
+
+.file-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 8px 2px 0;
+  min-height: 24px;
+}
+
+.file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #434343;
+  font-size: 12px;
+}
+
+.file-meta {
+  font-size: 11px;
+  color: #8c8c8c;
+  margin-right: 4px;
+}
+
+.file-action-btn {
+  visibility: hidden;
+  width: 20px !important;
+  height: 20px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  color: #8c8c8c;
+}
+
+.file-tree-item:hover .file-action-btn,
+.file-tree-root-label:hover .file-action-btn {
+  visibility: visible;
+}
+
+.file-tree-root-label {
+  display: flex;
+  align-items: center;
+  padding: 2px 8px 2px 12px;
+  width: 100%;
+  min-height: 24px;
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.file-tree-root-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: #262626;
+}

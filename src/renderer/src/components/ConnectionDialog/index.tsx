@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { Modal, Form, Input, InputNumber, Select, Button, Space, message } from 'antd'
-import { SSHConnectionConfig, Session } from '../../../shared/types'
+import { SSHConnectionConfig, Session } from '../../../../shared/types'
 import { KeyOutlined, LockOutlined, UserOutlined, CloudOutlined } from '@ant-design/icons'
+
+import './index.css'
 
 interface ConnectionDialogProps {
   open: boolean
@@ -188,9 +190,9 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
         }
       }}
       footer={(
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'flex-end', 
+        <div style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
           alignItems: 'center',
           backgroundColor: 'var(--bg-secondary)',
           padding: '10px 16px',

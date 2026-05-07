@@ -6,7 +6,9 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { DashboardOutlined, CloudDownloadOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import '@xterm/xterm/css/xterm.css'
-import { SystemStats } from '../../../shared/types'
+import { SystemStats } from '../../../../shared/types'
+
+import './index.css'
 
 interface TerminalProps {
   sessionId: string
@@ -70,7 +72,6 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     xterm.loadAddon(webLinksAddon)
     xterm.loadAddon(unicode11Addon)
 
-    // 激活 Unicode 11 以正确处理宽字符（如 🔥）
     xterm.unicode.activeVersion = '11'
 
     xterm.open(terminalRef.current)
@@ -111,7 +112,6 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     window.addEventListener('terminal:input', handleTerminalInput)
     window.addEventListener('shell:close', handleTerminalClose)
 
-    // 定时获取系统状态
     const statsInterval = setInterval(async () => {
       if (!isActiveRef.current) return
       try {
@@ -131,7 +131,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
         }
         prevNetRef.current = { rx: newStats.net.rx, tx: newStats.net.tx, time: now }
       } catch (e) {
-        // 静默失败
+        // ignore
       }
     }, 2000)
 
@@ -215,8 +215,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
           style={{ height: '100%' }}
         />
       </div>
-      
-      {/* 终端状态栏 */}
+
       <div style={{
         height: '24px',
         backgroundColor: '#2d2d2d',

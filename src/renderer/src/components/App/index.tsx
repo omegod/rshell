@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Layout, message, Button, ConfigProvider, theme } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
-import { Session, SSHConnectionConfig, FileInfo } from '../../shared/types'
-import TabBar from './components/TabBar'
-import FileBrowser from './components/FileBrowser'
-import Terminal from './components/Terminal'
-import ConnectionDialog from './components/ConnectionDialog'
-import ConnectionManager from './components/ConnectionManager'
-import FileEditor from './components/FileEditor'
-import SettingsDialog from './components/SettingsDialog'
+import { Session, SSHConnectionConfig, FileInfo } from '../../../../shared/types'
+import TabBar from '../TabBar'
+import FileBrowser from '../FileBrowser'
+import Terminal from '../Terminal'
+import ConnectionDialog from '../ConnectionDialog'
+import ConnectionManager from '../ConnectionManager'
+import FileEditor from '../FileEditor'
+import SettingsDialog from '../SettingsDialog'
 
-import { useConnectionStore } from './store/useConnectionStore'
+import { useConnectionStore } from '../../store/useConnectionStore'
+
+import './index.css'
 
 const { Content } = Layout
 
@@ -36,7 +38,6 @@ function App() {
   })
   const [editingConfig, setEditingConfig] = useState<SSHConnectionConfig | null>(null)
   const [editingFile, setEditingFile] = useState<FileInfo | null>(null)
-  const [lastUpdatedFile, setLastUpdatedFile] = useState<FileInfo | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(288)
   const [isResizing, setIsResizing] = useState(false)
   const [messageApi, contextHolder] = message.useMessage()
@@ -229,7 +230,6 @@ function App() {
                         currentPath={s.currentPath}
                         onPathChange={(path) => handlePathChange(s.session.id, path)}
                         onEditFile={(file) => setEditingFile(file)}
-                        updatedFile={lastUpdatedFile}
                       />
                     </div>
                     <div
@@ -313,8 +313,9 @@ function App() {
           sessionId={activeSession.session.id}
           filePath={editingFile.path}
           fileName={editingFile.name}
-          onClose={() => setEditingFile(null)}
-          onSave={(file) => setLastUpdatedFile(file)}
+          onClose={() => {
+            setEditingFile(null)
+          }}
         />
       )}
 

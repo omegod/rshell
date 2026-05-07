@@ -2,6 +2,8 @@ import React from 'react'
 import { Modal, Form, Select, InputNumber, Radio, Space, Button } from 'antd'
 import { DesktopOutlined, SunOutlined, MoonOutlined } from '@ant-design/icons'
 
+import './index.css'
+
 interface Settings {
   theme: 'light' | 'dark'
   terminalFontSize: number
@@ -54,9 +56,9 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
         }
       }}
       footer={(
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'flex-end', 
+        <div style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
           alignItems: 'center',
           backgroundColor: 'var(--bg-secondary)',
           padding: '10px 16px',

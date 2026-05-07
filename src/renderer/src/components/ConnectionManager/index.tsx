@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Modal, Table, Button, Space, message, Empty, Tooltip } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
-import { SSHConnectionConfig } from '../../../shared/types'
+import { SSHConnectionConfig } from '../../../../shared/types'
 
-import { useConnectionStore } from '../store/useConnectionStore'
+import { useConnectionStore } from '../../store/useConnectionStore'
+
+import './index.css'
 
 interface ConnectionManagerProps {
   open: boolean
@@ -40,7 +42,6 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
     }
   }, [open])
 
-  // 设置默认选中
   useEffect(() => {
     if (connections.length > 0 && !selectedId) {
       setSelectedId(connections[0].id)
@@ -72,8 +73,8 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
     })
   }
 
-  const selectedRecord = useMemo(() => 
-    connections.find(c => c.id === selectedId), 
+  const selectedRecord = useMemo(() =>
+    connections.find(c => c.id === selectedId),
   [connections, selectedId])
 
   const columns = [
@@ -126,9 +127,9 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
         },
       }}
       footer={(
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'flex-end', 
+        <div style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
           alignItems: 'center',
           backgroundColor: 'var(--bg-secondary)',
           padding: '10px 16px',
@@ -143,8 +144,8 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
             >
               新建
             </Button>
-            <Button 
-              danger 
+            <Button
+              danger
               disabled={!selectedId}
               icon={<DeleteOutlined />}
               onClick={() => selectedId && handleDelete(selectedId)}

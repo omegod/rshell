@@ -19,18 +19,19 @@ import {
   DownOutlined,
   RightOutlined,
 } from '@ant-design/icons'
-import { FileInfo } from '../../../shared/types'
+import { FileInfo } from '../../../../shared/types'
 import type { DataNode, TreeProps } from 'antd/es/tree'
-import { useSessionStore } from '../store/useSessionStore'
-import { useFileActions } from '../hooks/useFileActions'
-import { TransferPanel } from './FileBrowser/TransferPanel'
+import { useSessionStore } from '../../store/useSessionStore'
+import { useFileActions } from '../../hooks/useFileActions'
+import { TransferPanel } from './TransferPanel'
+
+import './index.css'
 
 interface FileBrowserProps {
   sessionId: string
   currentPath: string
   onPathChange: (path: string) => void
   onEditFile: (file: FileInfo) => void
-  updatedFile?: FileInfo | null
 }
 
 const PARENT_KEY = '__parent__'
@@ -41,7 +42,6 @@ export default function FileBrowser({
   currentPath,
   onPathChange,
   onEditFile,
-  updatedFile,
 }: FileBrowserProps) {
   const {
     sessions,
@@ -50,9 +50,7 @@ export default function FileBrowser({
     setLoadedKeys,
     setExpandedKeys: setStoreExpandedKeys,
     updateTransfer,
-    upsertFile,
     removeFile,
-    upsertChildFile,
     removeChildFile,
   } = useSessionStore()
 
@@ -66,14 +64,14 @@ export default function FileBrowser({
     handleDelete,
   } = useFileActions(sessionId)
 
-  const sessionState = sessions[sessionId] || { 
-    currentPath: '~', 
-    files: [], 
-    childrenMap: {}, 
-    loadedKeys: [], 
-    expandedKeys: [ROOT_KEY] 
+  const sessionState = sessions[sessionId] || {
+    currentPath: '~',
+    files: [],
+    childrenMap: {},
+    loadedKeys: [],
+    expandedKeys: [ROOT_KEY],
   }
-  
+
   const files = sessionState.files
   const childrenMap = sessionState.childrenMap
   const loadedKeys = sessionState.loadedKeys
@@ -92,7 +90,6 @@ export default function FileBrowser({
 
   const [transferPanelCollapsed, setTransferPanelCollapsed] = useState(false)
 
-  // 新建文件/文件夹相关状态
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createPath, setCreatePath] = useState('')
   const [createType, setCreateType] = useState<'folder' | 'file'>('folder')
@@ -118,18 +115,6 @@ export default function FileBrowser({
     fetchFiles()
   }, [currentPath, loadFiles])
 
-  // 监听单个文件更新
-  useEffect(() => {
-    if (!updatedFile) return
-    upsertFile(sessionId, updatedFile)
-    Object.entries(childrenMap).forEach(([dirPath, children]) => {
-      if (children.some((f) => f.path === updatedFile.path)) {
-        upsertChildFile(sessionId, dirPath, updatedFile)
-      }
-    })
-  }, [updatedFile, sessionId])
-
-  // 监听真实传输进度
   useEffect(() => {
     const handleProgress = (e: Event) => {
       const { id, percent, speed } = (e as CustomEvent).detail
@@ -511,8 +496,8 @@ export default function FileBrowser({
         </Spin>
       </div>
 
-      <TransferPanel 
-        collapsed={transferPanelCollapsed} 
+      <TransferPanel
+        collapsed={transferPanelCollapsed}
         onToggle={() => setTransferPanelCollapsed(!transferPanelCollapsed)}
         onCancel={handleCancelTransfer}
       />
@@ -535,9 +520,9 @@ export default function FileBrowser({
           }
         }}
         footer={(
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'flex-end', 
+          <div style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
             alignItems: 'center',
             backgroundColor: 'var(--bg-secondary)',
             padding: '10px 16px',

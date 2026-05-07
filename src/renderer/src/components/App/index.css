@@ -1,0 +1,127 @@
+/* Title Bar */
+.titlebar {
+  height: 38px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: drag;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.titlebar-spacer {
+  width: 70px;
+  min-width: 70px;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-title {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+/* Layout */
+.app-layout {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-content {
+  flex: 1;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
+/* Session */
+.session-content {
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+}
+
+.session-left {
+  width: 288px;
+  min-width: 240px;
+  max-width: 500px;
+  border-right: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
+.session-divider {
+  width: 1px;
+  background-color: var(--border-color);
+  cursor: col-resize;
+  flex-shrink: 0;
+}
+
+.session-divider:hover,
+.session-divider.resizing {
+  background-color: #1677ff;
+}
+
+.session-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Empty State */
+.empty-state {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-secondary);
+}
+
+.empty-state-content {
+  text-align: center;
+  user-select: none;
+}
+
+.empty-state-content h1 {
+  font-size: 48px;
+  font-weight: 300;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  letter-spacing: 2px;
+}
+
+.empty-state-content p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+/* Disconnected */
+.disconnected-overlay {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-secondary);
+}
+
+.disconnected-content {
+  text-align: center;
+}
+
+.disconnected-content h2 {
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.disconnected-content p {
+  margin-bottom: 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
