@@ -56,6 +56,11 @@ export class IPCManager {
       return Array.from(this.sessions.values())
     })
 
+    ipcMain.handle('sessions:close', (_event, sessionId: string) => {
+      this.sshService.disconnect(sessionId)
+      this.sessions.delete(sessionId)
+    })
+
     ipcMain.handle('sessions:send-input', (_event, sessionId: string, data: string) => {
       this.sshService.writeToShell(sessionId, data)
     })
@@ -187,7 +192,7 @@ export class IPCManager {
   }
 
   setupShellCallbacks(sessionId: string, window: BrowserWindow): void {
-    this.sshService.openShell(sessionId).then((stream) => {
+    this.sshService.openShell(sessionId).then(() => {
       this.sshService.onShellData(sessionId, (data) => {
         if (!window.isDestroyed()) {
           window.webContents.send('shell:data', sessionId, data)
@@ -203,6 +208,15 @@ export class IPCManager {
           appSession.connected = false
         }
       })
+    }).catch((err) => {
+      console.error(`Failed to open shell for session ${sessionId}:`, err)
+      if (!window.isDestroyed()) {
+        window.webContents.send('shell:close', sessionId)
+      }
+      const appSession = this.sessions.get(sessionId)
+      if (appSession) {
+        appSession.connected = false
+      }
     })
   }
 

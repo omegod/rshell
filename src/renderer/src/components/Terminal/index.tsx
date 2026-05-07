@@ -94,7 +94,6 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     xterm.onResize(handleResize)
 
     const handleTerminalInput = (e: Event) => {
-      if (!isActiveRef.current) return
       const { sessionId: eventSessionId, data } = (e as CustomEvent).detail
       if (eventSessionId === sessionId) {
         xterm.write(data)
@@ -102,7 +101,6 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     }
 
     const handleTerminalClose = (e: Event) => {
-      if (!isActiveRef.current) return
       const { sessionId: eventSessionId } = (e as CustomEvent).detail
       if (eventSessionId === sessionId) {
         xterm.write('\r\n\x1b[31m[Connection closed]\x1b[0m\r\n')

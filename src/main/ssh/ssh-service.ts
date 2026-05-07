@@ -176,11 +176,16 @@ export class SSHService {
             return
           }
           let output = ''
+          let timer: ReturnType<typeof setTimeout> | null = null
+          const done = (result: string) => {
+            if (timer) { clearTimeout(timer); timer = null }
+            resolve(result)
+          }
           stream.on('data', (data: Buffer) => { output += data.toString('utf-8') })
-          stream.on('close', () => { resolve(output.trim() || '/root') })
-          stream.on('error', () => { resolve('/root') })
-          // Set timeout to prevent hanging
-          setTimeout(() => resolve(output.trim() || '/root'), 5000)
+          stream.on('close', () => { done(output.trim() || '/root') })
+          stream.on('error', () => { done('/root') })
+          // Fallback timeout in case the stream never closes
+          timer = setTimeout(() => { done(output.trim() || '/root') }, 5000)
         })
       })
     }
@@ -325,11 +330,18 @@ export class SSHService {
 
     const resolvedRemotePath = await this.resolvePath(sessionId, remotePath)
 
+    // Stat the file first so totalSize is known before any data arrives,
+    // avoiding the race where small files finish before fstat() returns.
+    const totalSize = await new Promise<number>((resolve) => {
+      session.sftp.stat(resolvedRemotePath, (err, stats) => {
+        resolve(!err && stats ? stats.size : 0)
+      })
+    })
+
     return new Promise((resolve, reject) => {
       const readStream = session.sftp.createReadStream(resolvedRemotePath)
       const writeStream = fs.createWriteStream(localPath)
 
-      let totalSize = 0
       let transferred = 0
       let lastTime = Date.now()
       let lastBytes = 0
@@ -356,20 +368,15 @@ export class SSHService {
         }
       })
 
-      readStream.on('open', (fd: number) => {
-        session.sftp.fstat(fd, (err, stats) => {
-          if (!err && stats) {
-            totalSize = stats.size
-          }
-        })
-      })
-
       writeStream.on('close', () => {
         cleanup()
         if (aborted) {
           reject(new Error('Cancelled'))
         } else {
-          resolve(transferId)
+          if (onProgress && totalSize > 0) {
+            onProgress(100, 0)
+          }
+          resolve()
         }
       })
 

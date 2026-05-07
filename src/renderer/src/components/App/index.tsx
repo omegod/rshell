@@ -150,7 +150,6 @@ function App() {
       const remaining = sessions.filter((s) => s.session.id !== sessionId)
       setActiveSessionId(remaining.length > 0 ? remaining[0].session.id : null)
     }
-    messageApi.success('已断开连接')
   }, [activeSessionId, sessions, messageApi])
 
   const handlePathChange = useCallback((sessionId: string, path: string) => {

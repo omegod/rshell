@@ -190,6 +190,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
         style={{ height: '360px' }}
         rowClassName={(record) => record.id === selectedId ? 'ant-table-row-selected' : ''}
         onRow={(record) => ({
+          style: { cursor: 'pointer' },
           onClick: () => setSelectedId(record.id),
           onDoubleClick: () => {
             setSelectedId(record.id)
