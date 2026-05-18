@@ -10,3 +10,5 @@ dist
 .DS_Store
 build.keychain*
 *.p12
+.claude
+.codex
