@@ -5,6 +5,7 @@ import { Session, SSHConnectionConfig, FileInfo } from '../../../../shared/types
 import TabBar from '../TabBar'
 import FileBrowser from '../FileBrowser'
 import Terminal from '../Terminal'
+import StatusBar from '../Terminal/StatusBar'
 import ConnectionDialog from '../ConnectionDialog'
 import ConnectionManager from '../ConnectionManager'
 import FileEditor from '../FileEditor'
@@ -77,11 +78,6 @@ function App() {
       setShowSettings(true)
     }
 
-    const handleShellData = (e: Event) => {
-      const { sessionId, data } = (e as CustomEvent).detail
-      window.dispatchEvent(new CustomEvent('terminal:input', { detail: { sessionId, data } }))
-    }
-
     const handleShellClose = (e: Event) => {
       const { sessionId } = (e as CustomEvent).detail
       setSessions((prev) =>
@@ -115,7 +111,6 @@ function App() {
     window.addEventListener('menu:new-connection', handleNewConnection)
     window.addEventListener('menu:open-manager', handleOpenManager)
     window.addEventListener('menu:open-settings', handleOpenSettings)
-    window.addEventListener('shell:data', handleShellData)
     window.addEventListener('shell:close', handleShellClose)
     window.addEventListener('sessions:connected', handleSessionConnected)
     window.addEventListener('sessions:connect-error', handleConnectError)
@@ -124,7 +119,6 @@ function App() {
       window.removeEventListener('menu:new-connection', handleNewConnection)
       window.removeEventListener('menu:open-manager', handleOpenManager)
       window.removeEventListener('menu:open-settings', handleOpenSettings)
-      window.removeEventListener('shell:data', handleShellData)
       window.removeEventListener('shell:close', handleShellClose)
       window.removeEventListener('sessions:connected', handleSessionConnected)
       window.removeEventListener('sessions:connect-error', handleConnectError)
@@ -240,6 +234,10 @@ function App() {
                         sessionId={s.session.id}
                         isActive={s.session.id === activeSessionId}
                         fontSize={settings.terminalFontSize}
+                      />
+                      <StatusBar
+                        sessionId={s.session.id}
+                        isActive={s.session.id === activeSessionId}
                       />
                     </div>
                   </div>

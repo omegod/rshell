@@ -1,12 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Spin, Space } from 'antd'
+import { Spin } from 'antd'
 import { Terminal as XTerminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { DashboardOutlined, CloudDownloadOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import '@xterm/xterm/css/xterm.css'
-import { SystemStats } from '../../../../shared/types'
 
 import './index.css'
 
@@ -23,9 +21,6 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
   const lastSizeRef = useRef<{ cols: number; rows: number } | null>(null)
   const initialFitDone = useRef(false)
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState<SystemStats | null>(null)
-  const prevNetRef = useRef<{ rx: number; tx: number; time: number } | null>(null)
-  const [netSpeed, setNetSpeed] = useState<{ up: number; down: number }>({ up: 0, down: 0 })
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
 
@@ -98,7 +93,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     xterm.onData(handleInput)
     xterm.onResize(handleResize)
 
-    const handleTerminalInput = (e: Event) => {
+    const handleShellData = (e: Event) => {
       const { sessionId: eventSessionId, data } = (e as CustomEvent).detail
       if (eventSessionId === sessionId) {
         xterm.write(data)
@@ -109,38 +104,15 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
       }
     }
 
-    const handleTerminalClose = (e: Event) => {
+    const handleShellClose = (e: Event) => {
       const { sessionId: eventSessionId } = (e as CustomEvent).detail
       if (eventSessionId === sessionId) {
         xterm.write('\r\n\x1b[31m[Connection closed]\x1b[0m\r\n')
       }
     }
 
-    window.addEventListener('terminal:input', handleTerminalInput)
-    window.addEventListener('shell:close', handleTerminalClose)
-
-    const statsInterval = setInterval(async () => {
-      if (!isActiveRef.current) return
-      try {
-        const newStats = await window.api.sessions.stats(sessionId)
-        setStats(newStats)
-
-        const now = Date.now()
-        const prev = prevNetRef.current
-        if (prev) {
-          const dt = (now - prev.time) / 1000
-          if (dt > 0) {
-            setNetSpeed({
-              down: Math.max(0, (newStats.net.rx - prev.rx) / dt),
-              up: Math.max(0, (newStats.net.tx - prev.tx) / dt)
-            })
-          }
-        }
-        prevNetRef.current = { rx: newStats.net.rx, tx: newStats.net.tx, time: now }
-      } catch (e) {
-        // ignore
-      }
-    }, 2000)
+    window.addEventListener('shell:data', handleShellData)
+    window.addEventListener('shell:close', handleShellClose)
 
     let fitTimeout: ReturnType<typeof setTimeout>
     const resizeObserver = new ResizeObserver(() => {
@@ -169,9 +141,8 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     return () => {
       clearTimeout(fitTimeout)
       resizeObserver.disconnect()
-      window.removeEventListener('terminal:input', handleTerminalInput)
-      window.removeEventListener('shell:close', handleTerminalClose)
-      clearInterval(statsInterval)
+      window.removeEventListener('shell:data', handleShellData)
+      window.removeEventListener('shell:close', handleShellClose)
       xterm.dispose()
       xtermRef.current = null
       fitAddonRef.current = null
@@ -203,15 +174,9 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     }
   }, [isActive])
 
-  const formatSpeed = (bytesPerSec: number) => {
-    if (bytesPerSec < 1024) return `${Math.round(bytesPerSec)} B/s`
-    if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`
-    return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#1e1e1e' }}>
-      <div className="terminal-container" style={{ flex: 1, position: 'relative' }}>
+      <div className="terminal-container" style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {loading && (
           <div className="terminal-loading">
             <Spin />
@@ -220,49 +185,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
         <div
           ref={terminalRef}
           className={`terminal-wrapper ${loading ? 'hidden' : ''}`}
-          style={{ height: '100%' }}
         />
-      </div>
-
-      <div style={{
-        height: '24px',
-        backgroundColor: '#2d2d2d',
-        borderTop: '1px solid #333',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 12px',
-        fontSize: '11px',
-        color: '#aaa',
-        justifyContent: 'space-between',
-        flexShrink: 0
-      }}>
-        {stats ? (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <Space size={4}>
-                <DashboardOutlined style={{ fontSize: '12px' }} />
-                <span>CPU: {stats.cpu.toFixed(1)}%</span>
-              </Space>
-              <Space size={4}>
-                <span style={{ opacity: 0.8 }}>MEM:</span>
-                <span>{stats.mem.used} / {stats.mem.total} MB</span>
-                <span style={{ opacity: 0.6 }}>({((stats.mem.used / stats.mem.total) * 100).toFixed(0)}%)</span>
-              </Space>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Space size={4}>
-                <CloudDownloadOutlined style={{ color: '#52c41a' }} />
-                <span>{formatSpeed(netSpeed.down)}</span>
-              </Space>
-              <Space size={4}>
-                <CloudUploadOutlined style={{ color: '#1677ff' }} />
-                <span>{formatSpeed(netSpeed.up)}</span>
-              </Space>
-            </div>
-          </>
-        ) : (
-          <div style={{ opacity: 0.5 }}>系统监控不可用 (仅支持 Linux)</div>
-        )}
       </div>
     </div>
   )
