@@ -371,6 +371,7 @@ export default function FileBrowser({
       { key: 'create', label: '新建', icon: <PlusOutlined />, onClick: () => {
         setCreatePath(currentPath); setCreateType('folder'); setCreateName(''); setShowCreateModal(true);
       }},
+      { key: 'upload', label: '上传', icon: <UploadOutlined />, onClick: () => handleUpload() },
     ]
 
     return [{

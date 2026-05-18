@@ -20,6 +20,8 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const lastSizeRef = useRef<{ cols: number; rows: number } | null>(null)
+  const initialFitDone = useRef(false)
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<SystemStats | null>(null)
   const prevNetRef = useRef<{ rx: number; tx: number; time: number } | null>(null)
@@ -33,7 +35,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     const xterm = new XTerminal({
       fontFamily: '"SF Mono", "Menlo", "Monaco", "Courier New", monospace',
       fontSize: fontSize,
-      lineHeight: 1.2,
+      lineHeight: 1,
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 10000,
@@ -84,6 +86,9 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     }
 
     const handleResize = (event: { cols: number; rows: number }) => {
+      const last = lastSizeRef.current
+      if (last && last.cols === event.cols && last.rows === event.rows) return
+      lastSizeRef.current = { cols: event.cols, rows: event.rows }
       window.api.sessions.resize(sessionId, {
         cols: event.cols,
         rows: event.rows,
@@ -97,6 +102,10 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
       const { sessionId: eventSessionId, data } = (e as CustomEvent).detail
       if (eventSessionId === sessionId) {
         xterm.write(data)
+        if (!initialFitDone.current) {
+          initialFitDone.current = true
+          try { fitAddon.fit() } catch {}
+        }
       }
     }
 
@@ -185,6 +194,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
       const timer = setTimeout(() => {
         try {
           xtermRef.current?.focus()
+          fitAddonRef.current?.fit()
         } catch {
           // ignore
         }

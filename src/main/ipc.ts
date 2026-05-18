@@ -61,11 +61,11 @@ export class IPCManager {
       this.sessions.delete(sessionId)
     })
 
-    ipcMain.handle('sessions:send-input', (_event, sessionId: string, data: string) => {
+    ipcMain.on('sessions:send-input', (_event, sessionId: string, data: string) => {
       this.sshService.writeToShell(sessionId, data)
     })
 
-    ipcMain.handle('sessions:resize', (_event, sessionId: string, size: TerminalSize) => {
+    ipcMain.on('sessions:resize', (_event, sessionId: string, size: TerminalSize) => {
       this.sshService.resizeTerminal(sessionId, size)
     })
 

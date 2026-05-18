@@ -141,7 +141,14 @@ export const useSessionStore = create<SessionState>((set) => ({
       }
     }
 
-    return state
+    const next = [...prev.files, file]
+    next.sort(sortFiles)
+    return {
+      sessions: {
+        ...state.sessions,
+        [sessionId]: { ...prev, files: next }
+      }
+    }
   }),
 
   removeFile: (sessionId, filePath) => set((state) => {

@@ -113,8 +113,8 @@ export interface RShellApi {
     open(configId: string): Promise<Session>
     close(sessionId: string): Promise<void>
     list(): Promise<Session[]>
-    sendInput(sessionId: string, data: string): Promise<void>
-    resize(sessionId: string, size: TerminalSize): Promise<void>
+    sendInput(sessionId: string, data: string): void
+    resize(sessionId: string, size: TerminalSize): void
     execute(sessionId: string, command: string): Promise<string>
     stats(sessionId: string): Promise<SystemStats>
   }

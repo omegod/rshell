@@ -150,16 +150,16 @@ export function useFileActions(sessionId: string) {
 
       if (parentDir === currentPath) {
         await refreshFiles(currentPath)
-      } else {
-        if (childrenMap[parentDir]) {
-          removeChildFile(sessionId, parentDir, file.path)
-        }
+      } else if (childrenMap[parentDir]) {
+        removeChildFile(sessionId, parentDir, file.path)
         setLoadedKeys(sessionId, (prev) => prev.filter(k => k !== parentDir))
+      } else {
+        removeFile(sessionId, file.path)
       }
     } catch (err) {
       message.error(`删除失败: ${err instanceof Error ? err.message : '未知错误'}`)
     }
-  }, [sessionId, currentPath, childrenMap, refreshFiles, removeChildFile, setLoadedKeys])
+  }, [sessionId, currentPath, childrenMap, refreshFiles, removeFile, removeChildFile, setLoadedKeys])
 
   return {
     loadFiles,
