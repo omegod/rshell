@@ -97,6 +97,10 @@ export class SSHService {
       throw new Error('Session not connected')
     }
 
+    if (session.shell) {
+      return session.shell
+    }
+
     return new Promise((resolve, reject) => {
       session.client.shell(
         {

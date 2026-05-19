@@ -129,16 +129,20 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
 
     resizeObserver.observe(terminalRef.current)
 
-    setTimeout(() => {
+    const initTimeout = setTimeout(() => {
       try {
         fitAddon.fit()
       } catch {
         // ignore
       }
+      const size = { cols: xterm.cols, rows: xterm.rows }
+      lastSizeRef.current = size
+      window.api.sessions.openShell(sessionId, size)
       setLoading(false)
     }, 100)
 
     return () => {
+      clearTimeout(initTimeout)
       clearTimeout(fitTimeout)
       resizeObserver.disconnect()
       window.removeEventListener('shell:data', handleShellData)

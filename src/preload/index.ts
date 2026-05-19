@@ -14,6 +14,7 @@ const api: RShellApi = {
       ipcRenderer.send('sessions:connect-and-setup', configId)
       return Promise.resolve({} as Session)
     },
+    openShell: (sessionId: string, size: TerminalSize) => ipcRenderer.invoke('sessions:open-shell', sessionId, size),
     close: (sessionId: string) => ipcRenderer.invoke('sessions:close', sessionId),
     list: () => ipcRenderer.invoke('sessions:list'),
     sendInput: (sessionId: string, data: string) => { ipcRenderer.send('sessions:send-input', sessionId, data) },

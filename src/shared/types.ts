@@ -83,6 +83,7 @@ export type IPCChannel =
   | 'connections:get'
   | 'connections:test'
   | 'sessions:open'
+  | 'sessions:open-shell'
   | 'sessions:close'
   | 'sessions:list'
   | 'sessions:send-input'
@@ -111,6 +112,7 @@ export interface RShellApi {
   }
   sessions: {
     open(configId: string): Promise<Session>
+    openShell(sessionId: string, size: TerminalSize): Promise<void>
     close(sessionId: string): Promise<void>
     list(): Promise<Session[]>
     sendInput(sessionId: string, data: string): void

@@ -191,8 +191,8 @@ export class IPCManager {
     return session
   }
 
-  setupShellCallbacks(sessionId: string, window: BrowserWindow): void {
-    this.sshService.openShell(sessionId).then(() => {
+  setupShellCallbacks(sessionId: string, window: BrowserWindow, size?: TerminalSize): void {
+    this.sshService.openShell(sessionId, size).then(() => {
       this.sshService.onShellData(sessionId, (data) => {
         if (!window.isDestroyed()) {
           window.webContents.send('shell:data', sessionId, data)

@@ -60,7 +60,6 @@ function createWindow(): void {
     if (!ipcManager || !mainWindow) return
     try {
       const session = await ipcManager.openSession(configId)
-      ipcManager.setupShellCallbacks(session.id, mainWindow)
       mainWindow.webContents.send('sessions:connected', session)
     } catch (err) {
       mainWindow.webContents.send('sessions:connect-error', {
@@ -68,6 +67,11 @@ function createWindow(): void {
         error: err instanceof Error ? err.message : String(err),
       })
     }
+  })
+
+  ipcMain.handle('sessions:open-shell', async (_event, sessionId: string, size: { cols: number; rows: number }) => {
+    if (!ipcManager || !mainWindow) return
+    ipcManager.setupShellCallbacks(sessionId, mainWindow, size)
   })
 
   ipcMain.handle('window:minimize', () => {
