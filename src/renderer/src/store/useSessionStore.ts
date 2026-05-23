@@ -91,7 +91,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       sessions: {
         ...state.sessions,
         [sessionId]: {
-          ...(state.sessions[sessionId] || { currentPath: '~', files: [], childrenMap: [], expandedKeys: [] }),
+          ...(state.sessions[sessionId] || { currentPath: '~', files: [], childrenMap: {}, expandedKeys: [] }),
           loadedKeys: nextKeys
         }
       }

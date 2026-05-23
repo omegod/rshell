@@ -73,15 +73,3 @@ ipcRenderer.on('menu:open-manager', () => {
 ipcRenderer.on('menu:open-settings', () => {
   window.dispatchEvent(new CustomEvent('menu:open-settings'))
 })
-
-ipcRenderer.on('window:minimize', () => {
-  ipcRenderer.invoke('window:minimize')
-})
-
-ipcRenderer.on('window:maximize', () => {
-  ipcRenderer.invoke('window:maximize')
-})
-
-ipcRenderer.on('window:close', () => {
-  ipcRenderer.invoke('window:close')
-})

@@ -167,6 +167,10 @@ export class SSHService {
     if (!remotePath.startsWith('~')) {
       return remotePath
     }
+    // ~otheruser paths are not supported, return as-is
+    if (remotePath !== '~' && !remotePath.startsWith('~/')) {
+      return remotePath
+    }
     const session = this.sessions.get(sessionId)
     if (!session || !session.connected) {
       return remotePath
@@ -196,8 +200,7 @@ export class SSHService {
 
     const home = session.home!
     if (remotePath === '~') return home
-    if (remotePath.startsWith('~/')) return path.posix.join(home, remotePath.slice(2))
-    return remotePath.replace('~', home)
+    return path.posix.join(home, remotePath.slice(2))
   }
 
   async listFiles(sessionId: string, remotePath: string): Promise<import('../../shared/types').FileInfo[]> {
@@ -671,7 +674,7 @@ export class SSHService {
 
   private formatPermissions(mode: number): string {
     const perms = ['---', '--x', '-w-', '-wx', 'r--', 'r-x', 'rw-', 'rwx']
-    const modeStr = (mode & parseInt('777', 8)).toString(8)
+    const modeStr = (mode & parseInt('777', 8)).toString(8).padStart(3, '0')
     let result = ''
     for (let i = 0; i < 3; i++) {
       result += perms[parseInt(modeStr[i])]

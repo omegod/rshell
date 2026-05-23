@@ -89,6 +89,9 @@ export class IPCManager {
           stream.stderr.on('data', (data: Buffer) => {
             output += data.toString('utf-8')
           })
+          stream.on('error', (streamErr: Error) => {
+            reject(new Error(`Stream error: ${streamErr}`))
+          })
           stream.on('close', () => {
             resolve(output)
           })

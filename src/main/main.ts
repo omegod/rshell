@@ -102,6 +102,11 @@ function createWindow(): void {
   })
 
   mainWindow.on('closed', () => {
+    ipcMain.removeAllListeners('sessions:connect-and-setup')
+    ipcMain.removeHandler('sessions:open-shell')
+    ipcMain.removeHandler('window:minimize')
+    ipcMain.removeHandler('window:maximize')
+    ipcMain.removeHandler('window:close')
     mainWindow = null
     ipcManager = null
   })

@@ -98,7 +98,8 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
       onConnect(config)
 
       const configId = config.id
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
+        let timer: ReturnType<typeof setTimeout> | null = null
         const onConnected = (e: Event) => {
           const session = (e as CustomEvent).detail as Session
           if (session.configId === configId) {
@@ -107,16 +108,21 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
           }
         }
         const onError = (e: Event) => {
-          const { configId: id } = (e as CustomEvent).detail as { configId: string }
+          const { configId: id, error } = (e as CustomEvent).detail as { configId: string; error: string }
           if (id === configId) {
             cleanup()
-            resolve()
+            reject(new Error(error))
           }
         }
         const cleanup = () => {
+          if (timer) clearTimeout(timer)
           window.removeEventListener('sessions:connected', onConnected)
           window.removeEventListener('sessions:connect-error', onError)
         }
+        timer = setTimeout(() => {
+          cleanup()
+          reject(new Error('连接超时'))
+        }, 15000)
         window.addEventListener('sessions:connected', onConnected)
         window.addEventListener('sessions:connect-error', onError)
       })

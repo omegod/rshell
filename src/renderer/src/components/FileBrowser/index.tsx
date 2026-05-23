@@ -259,7 +259,7 @@ export default function FileBrowser({
       if (createType === 'folder') {
         await window.api.files.mkdir(sessionId, newPath)
       } else {
-        await window.api.sessions.execute(sessionId, `touch "${newPath}"`)
+        await window.api.files.write(sessionId, newPath, '')
       }
       messageApi.success('创建成功')
       setShowCreateModal(false)
