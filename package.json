@@ -54,11 +54,6 @@
       "out/**/*",
       "resources/**/*"
     ],
-    "electronLanguages": [
-      "en",
-      "zh_CN",
-      "zh_TW"
-    ],
     "mac": {
       "target": [
         "dmg",
