@@ -54,6 +54,7 @@
       "out/**/*",
       "resources/**/*"
     ],
+    "afterPack": "build/afterPack.cjs",
     "mac": {
       "target": [
         "dmg",
