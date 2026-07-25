@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
-  Tree, Button, Space, Modal, AutoComplete, message, Spin, Empty, Tooltip, Dropdown,
+  Tree, Button, Modal, AutoComplete, message, Spin, Empty, Tooltip, Dropdown,
   Select, Form, Input
 } from 'antd'
 import {
@@ -16,8 +16,6 @@ import {
   FileTextOutlined,
   MoreOutlined,
   PlusOutlined,
-  DownOutlined,
-  RightOutlined,
 } from '@ant-design/icons'
 import { FileInfo } from '../../../../shared/types'
 import type { DataNode, TreeProps } from 'antd/es/tree'
@@ -43,16 +41,13 @@ export default function FileBrowser({
   onPathChange,
   onEditFile,
 }: FileBrowserProps) {
-  const {
-    sessions,
-    setPath,
-    setFiles,
-    setLoadedKeys,
-    setExpandedKeys: setStoreExpandedKeys,
-    updateTransfer,
-    removeFile,
-    removeChildFile,
-  } = useSessionStore()
+  const sessionState = useSessionStore((state) => state.sessions[sessionId])
+  const setPath = useSessionStore((state) => state.setPath)
+  const setLoadedKeys = useSessionStore((state) => state.setLoadedKeys)
+  const setStoreExpandedKeys = useSessionStore((state) => state.setExpandedKeys)
+  const updateTransfer = useSessionStore((state) => state.updateTransfer)
+  const removeFile = useSessionStore((state) => state.removeFile)
+  const removeChildFile = useSessionStore((state) => state.removeChildFile)
 
   const {
     loadFiles,
@@ -64,7 +59,7 @@ export default function FileBrowser({
     handleDelete,
   } = useFileActions(sessionId)
 
-  const sessionState = sessions[sessionId] || {
+  const currentSessionState = sessionState || {
     currentPath: '~',
     files: [],
     childrenMap: {},
@@ -72,10 +67,10 @@ export default function FileBrowser({
     expandedKeys: [ROOT_KEY],
   }
 
-  const files = sessionState.files
-  const childrenMap = sessionState.childrenMap
-  const loadedKeys = sessionState.loadedKeys
-  const expandedKeys = sessionState.expandedKeys
+  const files = currentSessionState.files
+  const childrenMap = currentSessionState.childrenMap
+  const loadedKeys = currentSessionState.loadedKeys
+  const expandedKeys = currentSessionState.expandedKeys
 
   const [loading, setLoading] = useState(false)
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([])
@@ -84,11 +79,17 @@ export default function FileBrowser({
   const [messageApi, contextHolder] = message.useMessage()
   const [modal, modalContextHolder] = Modal.useModal()
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const suggestionRequestRef = useRef(0)
   const selectingRef = useRef(false)
+  const lastSuccessfulPathRef = useRef(currentPath)
+  const onPathChangeRef = useRef(onPathChange)
+  onPathChangeRef.current = onPathChange
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [treeHeight, setTreeHeight] = useState(0)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
 
-  const [transferPanelCollapsed, setTransferPanelCollapsed] = useState(false)
+  const [transferPanelCollapsed, setTransferPanelCollapsed] = useState(true)
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createPath, setCreatePath] = useState('')
@@ -109,33 +110,49 @@ export default function FileBrowser({
   useEffect(() => {
     const fetchFiles = async () => {
       setLoading(true)
-      await loadFiles(currentPath)
+      const success = await loadFiles(currentPath)
+      if (success) {
+        lastSuccessfulPathRef.current = currentPath
+      } else if (lastSuccessfulPathRef.current !== currentPath) {
+        onPathChangeRef.current(lastSuccessfulPathRef.current)
+      }
       setLoading(false)
     }
     fetchFiles()
   }, [currentPath, loadFiles])
 
   useEffect(() => {
-    const handleProgress = (e: Event) => {
-      const { id, percent, speed } = (e as CustomEvent).detail
-      updateTransfer(id, { progress: percent, speed: speed || 0 })
-    }
-    window.addEventListener('files:progress', handleProgress)
-    return () => window.removeEventListener('files:progress', handleProgress)
-  }, [updateTransfer])
+    const element = contentRef.current
+    if (!element) return
+    const observer = new ResizeObserver(([entry]) => {
+      setTreeHeight(Math.max(0, Math.floor(entry.contentRect.height - 8)))
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+  }, [])
 
   const fetchPathSuggestions = useCallback(async (value: string) => {
+    const requestId = ++suggestionRequestRef.current
     if (!value) {
       setPathOptions([])
       return
     }
 
     const lastSlash = value.lastIndexOf('/')
+    if (lastSlash < 0) {
+      setPathOptions([])
+      return
+    }
     const prefix = value.slice(lastSlash + 1)
     const parentDir = lastSlash === 0 ? '/' : value.slice(0, lastSlash)
 
     try {
       const list = await window.api.files.list(sessionId, parentDir)
+      if (requestId !== suggestionRequestRef.current) return
       const options = list
         .filter((f: FileInfo) => f.isDirectory && f.name.startsWith(prefix))
         .map((f: FileInfo) => {
@@ -146,9 +163,9 @@ export default function FileBrowser({
             label: (
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 {f.isDirectory ? (
-                  <FolderOutlined style={{ color: '#d4a853' }} />
+                  <FolderOutlined style={{ color: 'var(--folder)' }} />
                 ) : (
-                  <FileOutlined style={{ color: '#8e8e93' }} />
+                  <FileOutlined style={{ color: 'var(--text-tertiary)' }} />
                 )}
                 <span>{f.name}</span>
               </span>
@@ -157,21 +174,15 @@ export default function FileBrowser({
         })
       setPathOptions(options)
     } catch {
-      setPathOptions([])
+      if (requestId === suggestionRequestRef.current) setPathOptions([])
     }
   }, [sessionId])
 
-  const submitPath = useCallback(async (path: string) => {
+  const submitPath = useCallback((path: string) => {
     const trimmed = path.trim()
     if (!trimmed || trimmed === currentPath) return
-    try {
-      await window.api.files.list(sessionId, trimmed)
-      onPathChange(trimmed)
-    } catch {
-      messageApi.error('路径不存在')
-      setPathInput(currentPath)
-    }
-  }, [sessionId, currentPath, onPathChange, messageApi])
+    onPathChange(trimmed)
+  }, [currentPath, onPathChange])
 
   const handlePathInputChange = useCallback((value: string) => {
     setPathInput(value)
@@ -206,8 +217,8 @@ export default function FileBrowser({
   }
 
   const handleCancelTransfer = async (id: string) => {
-    await window.api.files.cancel(id)
     updateTransfer(id, { speed: 0, status: 'error' })
+    await window.api.files.cancel(id)
   }
 
   const handleRename = (file: FileInfo) => {
@@ -249,13 +260,18 @@ export default function FileBrowser({
   }
 
   const handleCreateConfirm = async () => {
-    if (!createName.trim()) {
+    const trimmedName = createName.trim()
+    if (!trimmedName) {
       messageApi.warning('请输入名称')
+      return
+    }
+    if (trimmedName === '.' || trimmedName === '..' || trimmedName.includes('/') || trimmedName.includes('\\')) {
+      messageApi.warning('名称不能包含路径分隔符')
       return
     }
     setCreating(true)
     try {
-      const newPath = createPath === '/' ? `/${createName}` : `${createPath}/${createName}`
+      const newPath = createPath === '/' ? `/${trimmedName}` : `${createPath}/${trimmedName}`
       if (createType === 'folder') {
         await window.api.files.mkdir(sessionId, newPath)
       } else {
@@ -318,7 +334,7 @@ export default function FileBrowser({
         title: (
           <div className="file-tree-item file-tree-item-editing">
             <span className="file-icon">
-              {isDir ? <FolderOutlined style={{ color: '#d4a853' }} /> : <FileOutlined style={{ color: '#8e8e93' }} />}
+              {isDir ? <FolderOutlined style={{ color: 'var(--folder)' }} /> : <FileOutlined style={{ color: 'var(--text-tertiary)' }} />}
             </span>
             <Input
               size="small"
@@ -344,9 +360,9 @@ export default function FileBrowser({
             <span className="file-icon">
               {isDir
                 ? (expandedKeys.includes(file.path)
-                    ? <FolderOpenOutlined style={{ color: '#d4a853' }} />
-                    : <FolderOutlined style={{ color: '#d4a853' }} />)
-                : <FileOutlined style={{ color: '#8e8e93' }} />}
+                    ? <FolderOpenOutlined style={{ color: 'var(--folder)' }} />
+                    : <FolderOutlined style={{ color: 'var(--folder)' }} />)
+                : <FileOutlined style={{ color: 'var(--text-tertiary)' }} />}
             </span>
             <span className="file-name">{file.name}</span>
             <span className="file-meta">
@@ -362,6 +378,15 @@ export default function FileBrowser({
       children: isDir ? (children ? children.map(buildFileNode) : undefined) : undefined,
     }
   }
+
+  const fileByPath = useMemo(() => {
+    const index = new Map<string, FileInfo>()
+    for (const file of files) index.set(file.path, file)
+    for (const children of Object.values(childrenMap)) {
+      for (const file of children) index.set(file.path, file)
+    }
+    return index
+  }, [files, childrenMap])
 
   const treeData = useMemo((): DataNode[] => {
     const rootChildren: DataNode[] = files.map(buildFileNode)
@@ -379,7 +404,7 @@ export default function FileBrowser({
       title: (
         <Dropdown menu={{ items: rootMenuItems }} trigger={['contextMenu']}>
           <div className="file-tree-root-label">
-            <FolderOutlined style={{ color: '#d4a853', marginRight: 6 }} />
+            <FolderOpenOutlined className="file-tree-root-icon" />
             <span className="file-tree-root-name">{dirName}</span>
             <Dropdown menu={{ items: rootMenuItems }} trigger={['click']}>
               <Button type="text" size="small" icon={<MoreOutlined />} className="file-action-btn" onClick={(e) => e.stopPropagation()} />
@@ -398,26 +423,28 @@ export default function FileBrowser({
   const handleLoadData: TreeProps['loadData'] = async (node) => {
     const key = node.key as string
     if (key === PARENT_KEY || key === ROOT_KEY) return
-    const file = files.find((f) => f.path === key)
-      || Object.values(childrenMap).flat().find((f) => f.path === key)
+    const file = fileByPath.get(key)
     if (file?.isDirectory) {
-      await loadDirChildren(file.path)
-      setLoadedKeys(sessionId, (prev) => [...prev, key])
+      // Enforce a minimum spinner duration so fast directory loads
+      // don't flash the loading icon for a single frame.
+      const [result] = await Promise.all([
+        loadDirChildren(file.path),
+        new Promise((resolve) => setTimeout(resolve, 400)),
+      ])
+      if (result) setLoadedKeys(sessionId, (prev) => prev.includes(key) ? prev : [...prev, key])
     }
   }
 
   const handleDoubleClick: TreeProps['onDoubleClick'] = (_info, node) => {
     const key = node.key as string
-    if (key === ROOT_KEY || key === PARENT_KEY) {
-      const parts = currentPath.split('/').filter(Boolean)
-      parts.pop()
-      onPathChange(parts.length === 0 ? '/' : `/${parts.join('/')}`)
+    if (key === ROOT_KEY) return
+    if (key === PARENT_KEY) {
+      onPathChange(getParentPath(currentPath))
       return
     }
-    const file = files.find((f) => f.path === key)
-      || Object.values(childrenMap).flat().find((f) => f.path === key)
+    const file = fileByPath.get(key)
     if (file?.isDirectory) onPathChange(file.path)
-    else if (file) handleDownload(file)
+    else if (file) onEditFile(file)
   }
 
   return (
@@ -425,26 +452,23 @@ export default function FileBrowser({
       {contextHolder}
       {modalContextHolder}
       <div className="file-browser-header">
-        <div className="file-browser-title-row">
-          <div className="file-browser-title">文件管理</div>
-          <div className="file-browser-toolbar">
+        <div className="file-browser-toolbar">
+          <div className="file-browser-toolbar-group">
             <Tooltip title="返回上级">
               <Button size="small" type="text" icon={<RollbackOutlined />} onClick={() => {
-                const parts = currentPath.split('/').filter(Boolean)
-                parts.pop()
-                onPathChange(parts.length === 0 ? '/' : `/${parts.join('/')}`)
+                onPathChange(getParentPath(currentPath))
               }} disabled={isRoot} />
             </Tooltip>
             <Tooltip title="刷新">
               <Button size="small" type="text" icon={<ReloadOutlined />} onClick={async () => {
                 await loadFiles(currentPath)
-                for (const key of expandedKeys) {
-                  if (key !== ROOT_KEY && key !== currentPath && childrenMap[key]) {
-                    loadDirChildren(key)
-                  }
-                }
+                const childKeys = expandedKeys.filter((key) => key !== ROOT_KEY && childrenMap[key])
+                const results = await Promise.all(childKeys.map(async (key) => ({ key, result: await loadDirChildren(key) })))
+                setLoadedKeys(sessionId, [ROOT_KEY, ...results.filter(({ result }) => result !== null).map(({ key }) => key)])
               }} />
             </Tooltip>
+          </div>
+          <div className="file-browser-toolbar-group">
             <Tooltip title="上传">
               <Button size="small" type="text" icon={<UploadOutlined />} onClick={() => handleUpload()} />
             </Tooltip>
@@ -468,8 +492,8 @@ export default function FileBrowser({
           />
         </div>
       </div>
-      <div className="file-browser-content">
-        <Spin spinning={loading} size="small">
+      <div className="file-browser-content" ref={contentRef}>
+        <Spin spinning={loading && files.length === 0} size="small">
           {files.length === 0 && !loading ? (
             <div style={{ padding: '40px 0' }}>
               <Empty description="空目录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -477,6 +501,7 @@ export default function FileBrowser({
           ) : (
             <Tree
               treeData={treeData}
+              height={treeHeight || undefined}
               expandedKeys={expandedKeys}
               selectedKeys={selectedKeys}
               loadedKeys={loadedKeys}
@@ -487,56 +512,34 @@ export default function FileBrowser({
               showLine={false}
               showIcon={false}
               blockNode
-              switcherIcon={({ expanded }) =>
-                expanded
-                  ? <DownOutlined style={{ fontSize: 10, color: '#8c8c8c' }} />
-                  : <RightOutlined style={{ fontSize: 10, color: '#8c8c8c' }} />
-              }
             />
           )}
         </Spin>
       </div>
 
       <TransferPanel
+        sessionId={sessionId}
         collapsed={transferPanelCollapsed}
         onToggle={() => setTransferPanelCollapsed(!transferPanelCollapsed)}
         onCancel={handleCancelTransfer}
       />
 
       <Modal
+        className="rshell-modal"
         title="新建"
         open={showCreateModal}
         onCancel={() => setShowCreateModal(false)}
         width={360}
         centered
         destroyOnClose
-        styles={{
-          content: {
-            padding: 0,
-            borderRadius: '8px',
-            overflow: 'hidden',
-          },
-          body: {
-            padding: '20px 24px',
-          }
-        }}
         footer={(
-          <div style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            alignItems: 'center',
-            backgroundColor: 'var(--bg-secondary)',
-            padding: '10px 16px',
-            borderTop: '1px solid var(--border-color)',
-          }}>
-            <Space>
-              <Button onClick={() => setShowCreateModal(false)}>
-                取消
-              </Button>
-              <Button type="primary" onClick={handleCreateConfirm} loading={creating}>
-                创建
-              </Button>
-            </Space>
+          <div className="rshell-modal-footer">
+            <Button onClick={() => setShowCreateModal(false)}>
+              取消
+            </Button>
+            <Button type="primary" onClick={handleCreateConfirm} loading={creating}>
+              创建
+            </Button>
           </div>
         )}
       >
@@ -569,4 +572,11 @@ function formatSize(bytes: number): string {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
+}
+
+function getParentPath(remotePath: string): string {
+  if (remotePath === '/') return '/'
+  const normalized = remotePath.replace(/\/+$/, '')
+  const index = normalized.lastIndexOf('/')
+  return index <= 0 ? '/' : normalized.slice(0, index)
 }

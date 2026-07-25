@@ -28,18 +28,18 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     if (!terminalRef.current) return
 
     const xterm = new XTerminal({
+      allowProposedApi: true,
       fontFamily: '"SF Mono", "Menlo", "Monaco", "Courier New", monospace',
       fontSize: fontSize,
-      lineHeight: 1,
+      lineHeight: 1.2,
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 10000,
-      allowProposedApi: true,
       theme: {
-        background: '#1e1e1e',
+        background: '#181a1b',
         foreground: '#d4d4d4',
         cursor: '#d4d4d4',
-        cursorAccent: '#1e1e1e',
+        cursorAccent: '#181a1b',
         selectionBackground: '#264f78',
         selectionForeground: '#ffffff',
         black: '#000000',
@@ -114,36 +114,38 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
     window.addEventListener('shell:data', handleShellData)
     window.addEventListener('shell:close', handleShellClose)
 
-    let fitTimeout: ReturnType<typeof setTimeout>
+    let fitFrame: number | null = null
     const resizeObserver = new ResizeObserver(() => {
       if (!isActiveRef.current) return
-      clearTimeout(fitTimeout)
-      fitTimeout = setTimeout(() => {
+      if (fitFrame !== null) cancelAnimationFrame(fitFrame)
+      fitFrame = requestAnimationFrame(() => {
         try {
           fitAddon.fit()
         } catch {
           // ignore
         }
-      }, 50)
+      })
     })
 
     resizeObserver.observe(terminalRef.current)
 
-    const initTimeout = setTimeout(() => {
+    const initTimeout = setTimeout(async () => {
       try {
         fitAddon.fit()
-      } catch {
-        // ignore
+        const size = { cols: xterm.cols, rows: xterm.rows }
+        lastSizeRef.current = size
+        await window.api.sessions.openShell(sessionId, size)
+      } catch (err) {
+        xterm.write(`\r\n\x1b[31m[${err instanceof Error ? err.message : 'Failed to open shell'}]\x1b[0m\r\n`)
+        window.dispatchEvent(new CustomEvent('shell:close', { detail: { sessionId } }))
+      } finally {
+        setLoading(false)
       }
-      const size = { cols: xterm.cols, rows: xterm.rows }
-      lastSizeRef.current = size
-      window.api.sessions.openShell(sessionId, size)
-      setLoading(false)
     }, 100)
 
     return () => {
       clearTimeout(initTimeout)
-      clearTimeout(fitTimeout)
+      if (fitFrame !== null) cancelAnimationFrame(fitFrame)
       resizeObserver.disconnect()
       window.removeEventListener('shell:data', handleShellData)
       window.removeEventListener('shell:close', handleShellClose)
@@ -179,7 +181,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
   }, [isActive])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#1e1e1e' }}>
+    <div className="terminal-root">
       <div className="terminal-container" style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {loading && (
           <div className="terminal-loading">

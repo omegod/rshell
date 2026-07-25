@@ -1,112 +1,116 @@
 .file-browser {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background-color: #fafafa;
+  background-color: var(--bg-secondary);
 }
 
+/* ---------- Header ---------- */
 .file-browser-header {
-  padding: 10px 12px;
+  padding: 8px 10px 10px;
   border-bottom: 1px solid var(--border-color);
-  background-color: #ffffff;
   flex-shrink: 0;
 }
 
-.file-browser-title-row {
+.file-browser-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
 }
 
-.file-browser-title {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-}
-
-.file-browser-toolbar {
+.file-browser-toolbar-group {
   display: flex;
+  align-items: center;
   gap: 2px;
 }
 
 .file-browser-toolbar .ant-btn {
+  width: 24px;
+  height: 22px;
+  padding: 0;
   color: var(--text-secondary);
   border: none;
   background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
 }
 
-.file-browser-toolbar .ant-btn:hover {
-  background-color: rgba(0, 0, 0, 0.05) !important;
+.file-browser-toolbar .ant-btn:hover:not(:disabled) {
+  background-color: var(--bg-hover) !important;
   color: var(--text-primary);
 }
 
-.file-browser-path-input {
-  width: 100%;
+.file-browser-toolbar .ant-btn:disabled {
+  color: var(--text-tertiary);
+  background: transparent;
 }
 
+/* ---------- Path bar ---------- */
+/* Keep antd's own internal metrics; only restyle surface/border/font
+   so the cursor, text and placeholder stay aligned. */
 .file-browser-path-input .ant-select {
   width: 100% !important;
 }
 
 .file-browser-path-input .ant-select-selector {
-  background-color: #f0f1f2 !important;
-  border: none !important;
-  border-radius: 4px !important;
-  height: 26px !important;
-  padding: 0 2px !important;
-  display: flex !important;
-  align-items: center !important;
-  transition: background-color 0.2s ease !important;
+  background-color: var(--bg-tertiary) !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease !important;
 }
 
-.file-browser-path-input .ant-select-selector:hover {
-  background-color: #e6e8eb !important;
+.file-browser-path-input .ant-select:hover .ant-select-selector {
+  background-color: var(--bg-active) !important;
 }
 
-.file-browser-path-input .ant-select-selection-search {
-  inset-inline-start: 2px !important;
-  inset-inline-end: 2px !important;
-  top: 0 !important;
-  bottom: 0 !important;
-  display: flex !important;
-  align-items: center !important;
+.file-browser-path-input .ant-select-focused .ant-select-selector,
+.file-browser-path-input .ant-select-open .ant-select-selector {
+  background-color: var(--bg-primary) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--focus-ring) !important;
 }
 
-.file-browser-path-input .ant-select-selection-search-input {
+.file-browser-path-input .ant-select-selection-search-input,
+.file-browser-path-input .ant-select-selection-item {
+  font-family: 'SF Mono', Menlo, Monaco, 'Courier New', monospace !important;
   font-size: 12px !important;
-  height: 22px !important;
-  line-height: 22px !important;
-  padding: 0 2px !important;
 }
 
 .file-browser-path-input .ant-select-selection-item {
-  line-height: 26px !important;
-  padding: 0 2px !important;
-  font-size: 12px !important;
+  color: var(--text-primary);
 }
 
 .file-browser-path-input .ant-select-selection-placeholder {
-  line-height: 26px !important;
-  padding-inline-start: 2px !important;
-  padding-inline-end: 2px !important;
-  font-size: 12px !important;
-  display: flex !important;
-  align-items: center !important;
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 
+.file-browser-path-input input {
+  display: block;
+  height: 100%;
+}
+
+/* ---------- Tree ---------- */
 .file-browser-content {
   flex: 1;
+  min-height: 0;
   overflow: auto;
-  padding: 4px 0;
+  padding: 4px 6px;
+}
+
+.file-browser-content > .ant-spin-nested-loading,
+.file-browser-content > .ant-spin-nested-loading > .ant-spin-container {
+  height: 100%;
 }
 
 .file-browser-content .ant-tree {
-  font-size: 13px;
+  font-size: 12px;
   background: transparent;
+  color: var(--text-primary);
 }
 
 .file-browser-content .ant-tree-treenode {
@@ -114,10 +118,21 @@
   width: 100%;
   display: flex !important;
   align-items: center !important;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.1s ease;
+}
+
+.file-browser-content .ant-tree-treenode:hover {
+  background-color: var(--bg-hover);
+}
+
+.file-browser-content .ant-tree-treenode:has(.ant-tree-node-selected) {
+  background-color: var(--bg-selected);
 }
 
 .file-browser-content .ant-tree-switcher {
-  width: 24px !important;
+  position: relative;
+  width: 18px !important;
   height: 24px !important;
   display: flex !important;
   align-items: center !important;
@@ -125,31 +140,61 @@
   flex-shrink: 0 !important;
 }
 
-.file-browser-content .ant-tree-switcher .ant-tree-switcher-icon {
-  margin: 0 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+/* Hide antd's default caret glyph; the loading spinner stays
+   (it is faded in with a delay below, so fast loads never flash). */
+.file-browser-content .ant-tree-switcher .anticon:not(.ant-tree-switcher-loading-icon) {
+  display: none !important;
 }
 
-.file-browser-content .ant-tree-switcher .ant-tree-switcher-icon svg {
-  transform: none !important;
+/* Crisp vector chevron, absolutely centered so it never affects
+   the layout of the loading spinner that shares this box. */
+.file-browser-content .ant-tree-switcher:not(.ant-tree-switcher-noop)::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  background-color: var(--text-tertiary);
+  -webkit-mask: var(--icon-chevron-right) center / contain no-repeat;
+  mask: var(--icon-chevron-right) center / contain no-repeat;
+  transition: transform 0.15s ease, opacity 0.1s ease;
+}
+
+.file-browser-content .ant-tree-treenode-switcher-open > .ant-tree-switcher::before {
+  transform: rotate(90deg);
+}
+
+/* While children load: chevron swaps out instantly and the spinner
+   shows for the whole load — one continuous spinner, no flicker.
+   (handleLoadData enforces a minimum spin duration for fast loads.) */
+.file-browser-content .ant-tree-treenode-loading > .ant-tree-switcher::before {
+  opacity: 0;
+  transition: none;
+}
+
+.file-browser-content .ant-tree-switcher .ant-tree-switcher-loading-icon {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  opacity: 0;
+}
+
+.file-browser-content .ant-tree-treenode-loading > .ant-tree-switcher .ant-tree-switcher-loading-icon {
+  opacity: 1;
+  transition: none;
 }
 
 .file-browser-content .ant-tree-node-content-wrapper {
   flex: 1;
   min-width: 0;
   padding: 0 !important;
-  border-radius: 0;
-  transition: background-color 0.1s ease;
+  background: transparent !important;
 }
 
-.file-browser-content .ant-tree-node-content-wrapper:hover {
-  background-color: #f0f0f0 !important;
-}
-
-.file-browser-content .ant-tree-node-selected {
-  background-color: #e6f4ff !important;
+.file-browser-content .ant-tree-node-content-wrapper:hover,
+.file-browser-content .ant-tree-node-content-wrapper.ant-tree-node-selected {
+  background: transparent !important;
 }
 
 .file-tree-item {
@@ -157,7 +202,7 @@
   align-items: center;
   gap: 6px;
   width: 100%;
-  padding: 2px 8px 2px 0;
+  padding: 0 6px 0 0;
   min-height: 24px;
 }
 
@@ -165,9 +210,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  font-size: 14px;
-  opacity: 0.85;
+  width: 16px;
+  font-size: 13px;
+  flex-shrink: 0;
 }
 
 .file-name {
@@ -175,25 +220,32 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #434343;
+  color: var(--text-primary);
   font-size: 12px;
 }
 
 .file-meta {
-  font-size: 11px;
-  color: #8c8c8c;
-  margin-right: 4px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
 }
 
 .file-action-btn {
   visibility: hidden;
-  width: 20px !important;
-  height: 20px !important;
+  width: 18px !important;
+  height: 18px !important;
   padding: 0 !important;
   display: flex !important;
   align-items: center;
   justify-content: center;
-  color: #8c8c8c;
+  color: var(--text-tertiary);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.file-action-btn:hover {
+  background-color: var(--bg-active) !important;
+  color: var(--text-primary) !important;
 }
 
 .file-tree-item:hover .file-action-btn,
@@ -201,18 +253,35 @@
   visibility: visible;
 }
 
+/* Root row = current directory header */
 .file-tree-root-label {
   display: flex;
   align-items: center;
-  padding: 2px 8px 2px 12px;
+  gap: 6px;
   width: 100%;
-  min-height: 24px;
-  background-color: rgba(0, 0, 0, 0.02);
+  min-height: 26px;
+  padding: 0 6px 0 2px;
+}
+
+.file-tree-root-icon {
+  color: var(--folder);
+  font-size: 14px;
 }
 
 .file-tree-root-name {
   flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 600;
-  color: #262626;
+  color: var(--text-primary);
+}
+
+/* Inline rename input */
+.file-rename-input {
+  height: 20px;
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 0 6px;
 }

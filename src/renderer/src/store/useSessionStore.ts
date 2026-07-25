@@ -3,6 +3,7 @@ import { FileInfo, Session } from '../../../shared/types'
 
 export interface TransferItem {
   id: string
+  sessionId: string
   fileName: string
   progress: number
   speed: number
@@ -13,7 +14,6 @@ export interface TransferItem {
 }
 
 interface SessionState {
-  activeSessionId: string | null
   sessions: Record<string, {
     currentPath: string
     files: FileInfo[]
@@ -24,12 +24,12 @@ interface SessionState {
   transfers: TransferItem[]
   
   // Actions
-  setActiveSession: (id: string | null) => void
   setPath: (sessionId: string, path: string) => void
   setFiles: (sessionId: string, files: FileInfo[]) => void
   updateChildren: (sessionId: string, dirPath: string, children: FileInfo[]) => void
   setLoadedKeys: (sessionId: string, keys: string[] | ((prev: string[]) => string[])) => void
   setExpandedKeys: (sessionId: string, keys: string[]) => void
+  removeSession: (sessionId: string) => void
 
   // Diff update actions
   upsertFile: (sessionId: string, file: FileInfo) => void
@@ -45,11 +45,8 @@ interface SessionState {
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
-  activeSessionId: null,
   sessions: {},
   transfers: [],
-
-  setActiveSession: (id) => set({ activeSessionId: id }),
 
   setPath: (sessionId, path) => set((state) => ({
     sessions: {
@@ -107,6 +104,15 @@ export const useSessionStore = create<SessionState>((set) => ({
       }
     }
   })),
+
+  removeSession: (sessionId) => set((state) => {
+    const sessions = { ...state.sessions }
+    delete sessions[sessionId]
+    return {
+      sessions,
+      transfers: state.transfers.filter((transfer) => transfer.sessionId !== sessionId),
+    }
+  }),
 
   upsertFile: (sessionId, file) => set((state) => {
     const prev = state.sessions[sessionId]
@@ -200,7 +206,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   }),
 
   addTransfer: (transfer) => set((state) => ({
-    transfers: [transfer, ...state.transfers]
+    transfers: [transfer, ...state.transfers].slice(0, 20)
   })),
 
   updateTransfer: (id, updates) => set((state) => ({

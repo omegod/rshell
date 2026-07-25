@@ -1,6 +1,6 @@
 import React from 'react'
-import { Tabs, Button, Tooltip, Dropdown } from 'antd'
-import { PlusOutlined, SettingOutlined, CloseOutlined } from '@ant-design/icons'
+import { Dropdown } from 'antd'
+import { PlusOutlined, SettingOutlined, CloseOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import { Session } from '../../../../shared/types'
 
 import './index.css'
@@ -12,6 +12,7 @@ interface TabBarProps {
   onTabClose: (sessionId: string) => void
   onNewConnection: () => void
   onOpenManager: () => void
+  onOpenSettings: () => void
 }
 
 const TabBar: React.FC<TabBarProps> = ({
@@ -21,67 +22,59 @@ const TabBar: React.FC<TabBarProps> = ({
   onTabClose,
   onNewConnection,
   onOpenManager,
+  onOpenSettings,
 }) => {
-  const items = sessions.map((session) => ({
-    key: session.id,
-    label: (
-      <div className="tab-label">
-        <span className="tab-title">{session.configName}</span>
-        <span className={`tab-status ${session.connected ? 'connected' : 'disconnected'}`} />
-      </div>
-    ),
-    closable: true,
-    closeIcon: (
-      <CloseOutlined
-        onClick={(e) => {
-          e.stopPropagation()
-          onTabClose(session.id)
-        }}
-      />
-    ),
-  }))
-
   return (
     <div className="tab-bar">
-      <div className="tab-bar-left">
+      <div className="tab-bar-actions">
         <Dropdown
           menu={{
             items: [
-              {
-                key: 'new',
-                label: '新建连接',
-                icon: <PlusOutlined />,
-                onClick: onNewConnection,
-              },
-              {
-                key: 'manager',
-                label: '连接管理',
-                icon: <SettingOutlined />,
-                onClick: onOpenManager,
-              },
+              { key: 'new', label: '新建连接', icon: <PlusOutlined />, onClick: onNewConnection },
+              { key: 'manager', label: '连接管理', icon: <UnorderedListOutlined />, onClick: onOpenManager },
             ],
           }}
           trigger={['click']}
+          placement="bottomLeft"
         >
-          <Button type="text" icon={<PlusOutlined />} className="new-tab-button" />
+          <button type="button" className="tab-bar-icon-btn" title="新建连接">
+            <PlusOutlined />
+          </button>
         </Dropdown>
       </div>
-      <div className="tab-bar-center">
-        {sessions.length > 0 && (
-          <Tabs
-            type="editable-card"
-            hideAdd
-            activeKey={activeSessionId || undefined}
-            items={items}
-            onChange={(key) => onTabClick(key)}
-            onEdit={(targetKey, action) => {
-              if (action === 'remove' && typeof targetKey === 'string') {
-                onTabClose(targetKey)
-              }
-            }}
-            size="small"
-          />
-        )}
+
+      <div className="tab-strip">
+        {sessions.map((session) => {
+          const isActive = session.id === activeSessionId
+          return (
+            <div
+              key={session.id}
+              className={`tab-item ${isActive ? 'active' : ''}`}
+              onClick={() => onTabClick(session.id)}
+              title={session.configName}
+            >
+              <span className={`tab-status ${session.connected ? 'connected' : 'disconnected'}`} />
+              <span className="tab-title">{session.configName}</span>
+              <button
+                type="button"
+                className="tab-close"
+                title="关闭"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTabClose(session.id)
+                }}
+              >
+                <CloseOutlined />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="tab-bar-actions">
+        <button type="button" className="tab-bar-icon-btn" title="设置" onClick={onOpenSettings}>
+          <SettingOutlined />
+        </button>
       </div>
     </div>
   )

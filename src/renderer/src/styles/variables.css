@@ -1,10 +1,91 @@
 :root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f5;
-  --bg-tertiary: #e8e8e8;
+  color-scheme: light;
+
+  /* Layout metrics */
+  --sidebar-width: 288px;
+  --tabbar-height: 38px;
+  --statusbar-height: 26px;
+
+  /* Surfaces */
+  --bg-primary: #ffffff;        /* main content */
+  --bg-secondary: #f5f5f7;      /* sidebar / tab bar (macOS window chrome gray) */
+  --bg-tertiary: #ececf0;       /* recessed controls */
+  --bg-hover: rgba(0, 0, 0, 0.045);
+  --bg-active: rgba(0, 0, 0, 0.07);
+  --bg-selected: rgba(79, 109, 245, 0.10);
+
+  /* Text */
   --text-primary: #1d1d1f;
   --text-secondary: #6e6e73;
   --text-tertiary: #aeaeb2;
-  --border-color: #d1d1d6;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+
+  /* Hairlines */
+  --border-color: rgba(0, 0, 0, 0.09);
+  --border-strong: rgba(0, 0, 0, 0.14);
+
+  /* Accent (Indigo) */
+  --accent: #4f6df5;
+  --accent-hover: #3f5ce8;
+  --accent-active: #3550d4;
+  --accent-contrast: #ffffff;
+  --focus-ring: rgba(79, 109, 245, 0.30);
+
+  /* Semantic */
+  --folder: #539bf5;
+  --success: #34c759;
+  --danger: #ff3b30;
+  --warning: #ff9500;
+
+  /* Terminal (always dark) */
+  --terminal-bg: #1b1c1f;
+  --terminal-status: #232428;
+  --terminal-status-border: rgba(255, 255, 255, 0.07);
+  --terminal-status-text: #98989d;
+
+  /* Radius */
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+
+  /* Overlay shadow (menus / modals only) */
+  --shadow-overlay: 0 12px 34px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.06);
+
+  /* Vector chevron for tree switchers (color comes from mask background) */
+  --icon-chevron-right: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4 2l4 4-4 4' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-primary: #1e1e21;
+  --bg-secondary: #26262a;
+  --bg-tertiary: #323236;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.09);
+  --bg-selected: rgba(107, 130, 255, 0.24);
+
+  --text-primary: #f5f5f7;
+  --text-secondary: #98989d;
+  --text-tertiary: #636366;
+
+  --border-color: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --accent: #6b82ff;
+  --accent-hover: #7d92ff;
+  --accent-active: #5468e8;
+  --accent-contrast: #ffffff;
+  --focus-ring: rgba(107, 130, 255, 0.38);
+
+  --folder: #64a8ff;
+  --success: #30d158;
+  --danger: #ff453a;
+  --warning: #ff9f0a;
+
+  --terminal-bg: #1b1c1f;
+  --terminal-status: #232428;
+  --terminal-status-border: rgba(255, 255, 255, 0.07);
+  --terminal-status-text: #8e8e93;
+
+  --shadow-overlay: 0 14px 40px rgba(0, 0, 0, 0.48), 0 2px 10px rgba(0, 0, 0, 0.30);
 }

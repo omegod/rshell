@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Modal, Table, Button, Space, message, Empty, Tooltip } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
+import { Modal, Button, message, Spin, Empty } from 'antd'
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  PlayCircleOutlined,
+  ExclamationCircleOutlined,
+  CloudServerOutlined,
+  RightOutlined,
+} from '@ant-design/icons'
 import { SSHConnectionConfig } from '../../../../shared/types'
 
 import { useConnectionStore } from '../../store/useConnectionStore'
@@ -10,8 +18,9 @@ import './index.css'
 interface ConnectionManagerProps {
   open: boolean
   onClose: () => void
-  onConnect: (config: SSHConnectionConfig) => void
+  onConnect: (config: SSHConnectionConfig) => Promise<void>
   onEdit: (config: SSHConnectionConfig | null) => void
+  embedded?: boolean
 }
 
 const ConnectionManager: React.FC<ConnectionManagerProps> = ({
@@ -19,6 +28,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
   onClose,
   onConnect,
   onEdit,
+  embedded = false,
 }) => {
   const { connections, loading, fetchConnections, removeConnection } = useConnectionStore()
   const [connectingId, setConnectingId] = useState<string | null>(null)
@@ -27,20 +37,11 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
   const [modal, modalContextHolder] = Modal.useModal()
 
   useEffect(() => {
-    if (open) {
+    if (open || embedded) {
       fetchConnections()
       setConnectingId(null)
     }
-
-    const handleConnectError = () => {
-      setConnectingId(null)
-    }
-
-    window.addEventListener('sessions:connect-error', handleConnectError)
-    return () => {
-      window.removeEventListener('sessions:connect-error', handleConnectError)
-    }
-  }, [open])
+  }, [open, embedded])
 
   useEffect(() => {
     if (connections.length > 0 && !selectedId) {
@@ -48,8 +49,17 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
     }
   }, [connections, selectedId])
 
+  const connect = async (config: SSHConnectionConfig) => {
+    setConnectingId(config.id)
+    try {
+      await onConnect(config)
+    } finally {
+      setConnectingId(null)
+    }
+  }
+
   const handleDelete = async (id: string) => {
-    const conn = connections.find(c => c.id === id)
+    const conn = connections.find((c) => c.id === id)
     if (!conn) return
 
     modal.confirm({
@@ -66,148 +76,132 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
           messageApi.success('已删除')
           removeConnection(id)
           setSelectedId(null)
-        } catch (err) {
+        } catch {
           messageApi.error('删除失败')
         }
       },
     })
   }
 
-  const selectedRecord = useMemo(() =>
-    connections.find(c => c.id === selectedId),
-  [connections, selectedId])
+  const selectedRecord = useMemo(
+    () => connections.find((c) => c.id === selectedId),
+    [connections, selectedId]
+  )
 
-  const columns = [
-    {
-      title: '名称',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text: string) => <strong>{text}</strong>,
-    },
-    {
-      title: '主机',
-      dataIndex: 'host',
-      key: 'host',
-    },
-    {
-      title: '端口',
-      dataIndex: 'port',
-      key: 'port',
-      width: 80,
-    },
-    {
-      title: '用户名',
-      dataIndex: 'username',
-      key: 'username',
-    },
-    {
-      title: '认证方式',
-      dataIndex: 'authType',
-      key: 'authType',
-      width: 100,
-      render: (text: string) => (text === 'password' ? '密码' : '密钥'),
-    },
-  ]
+  const listContent = (
+    <div className="connection-list-panel">
+      {loading ? (
+        <div className="connection-list-state">
+          <Spin size="small" />
+        </div>
+      ) : connections.length === 0 ? (
+        <div className="connection-list-state">
+          <Empty
+            description="暂无连接，点击「新建连接」开始"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
+        </div>
+      ) : (
+        connections.map((conn) => (
+          <div
+            key={conn.id}
+            className={`connection-row ${conn.id === selectedId ? 'selected' : ''}`}
+            onClick={() => setSelectedId(conn.id)}
+            onDoubleClick={() => connect(conn)}
+          >
+            <div className="connection-row-icon">
+              <CloudServerOutlined />
+            </div>
+            <div className="connection-row-main">
+              <div className="connection-row-name">{conn.name}</div>
+              <div className="connection-row-meta">
+                {conn.username}@{conn.host}:{conn.port} · {conn.authType === 'password' ? '密码认证' : '密钥认证'}
+              </div>
+            </div>
+            <div className="connection-row-trailing">
+              {connectingId === conn.id ? (
+                <Spin size="small" />
+              ) : (
+                <RightOutlined className="connection-row-chevron" />
+              )}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )
+
+  const actionButtons = (showNew: boolean) => (
+    <>
+      {showNew && (
+        <Button icon={<PlusOutlined />} onClick={() => onEdit(null)}>
+          新建
+        </Button>
+      )}
+      <Button
+        icon={<EditOutlined />}
+        disabled={!selectedId}
+        onClick={() => selectedRecord && onEdit(selectedRecord)}
+      >
+        编辑
+      </Button>
+      <Button
+        danger
+        icon={<DeleteOutlined />}
+        disabled={!selectedId}
+        onClick={() => selectedId && handleDelete(selectedId)}
+      >
+        删除
+      </Button>
+      <Button
+        type="primary"
+        icon={<PlayCircleOutlined />}
+        disabled={!selectedId}
+        loading={connectingId === selectedId}
+        onClick={() => selectedRecord && connect(selectedRecord)}
+      >
+        连接
+      </Button>
+    </>
+  )
+
+  if (embedded) {
+    return (
+      <main className="connection-home">
+        {contextHolder}
+        {modalContextHolder}
+        <div className="connection-home-inner">
+          <header className="connection-home-header">
+            <div>
+              <h1>连接</h1>
+              <p>选择一个远程主机开始会话，双击即可连接</p>
+            </div>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => onEdit(null)}>
+              新建连接
+            </Button>
+          </header>
+          {listContent}
+          {connections.length > 0 && (
+            <div className="connection-actions">{actionButtons(false)}</div>
+          )}
+        </div>
+      </main>
+    )
+  }
 
   return (
     <Modal
-      title="连接管理"
+      className="rshell-modal"
+      title="连接"
       open={open}
       onCancel={onClose}
-      width={720}
+      width={520}
       centered
-      styles={{
-        content: {
-          padding: 0,
-        },
-        body: {
-          height: '360px',
-          overflow: 'hidden',
-          padding: '0',
-        },
-      }}
-      footer={(
-        <div style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
-          backgroundColor: 'var(--bg-secondary)',
-          padding: '10px 16px',
-          borderTop: '1px solid var(--border-color)',
-          borderBottomLeftRadius: '8px',
-          borderBottomRightRadius: '8px',
-        }}>
-          <Space>
-            <Button
-              icon={<PlusOutlined />}
-              onClick={() => onEdit(null)}
-            >
-              新建
-            </Button>
-            <Button
-              danger
-              disabled={!selectedId}
-              icon={<DeleteOutlined />}
-              onClick={() => selectedId && handleDelete(selectedId)}
-            >
-              删除
-            </Button>
-            <Button
-              disabled={!selectedId}
-              icon={<EditOutlined />}
-              onClick={() => selectedRecord && onEdit(selectedRecord)}
-            >
-              编辑
-            </Button>
-            <Button
-              type="primary"
-              disabled={!selectedId}
-              loading={connectingId !== null && connectingId === selectedId}
-              icon={<PlayCircleOutlined />}
-              onClick={() => {
-                if (selectedRecord) {
-                  setConnectingId(selectedRecord.id)
-                  onConnect(selectedRecord)
-                }
-              }}
-            >
-              连接
-            </Button>
-          </Space>
-        </div>
-      )}
+      footer={<div className="rshell-modal-footer">{actionButtons(true)}</div>}
     >
       {contextHolder}
       {modalContextHolder}
-      <Table
-        columns={columns}
-        dataSource={connections}
-        rowKey="id"
-        loading={loading}
-        pagination={false}
-        size="small"
-        scroll={{ y: 324 }}
-        style={{ height: '360px' }}
-        rowClassName={(record) => record.id === selectedId ? 'ant-table-row-selected' : ''}
-        onRow={(record) => ({
-          style: { cursor: 'pointer' },
-          onClick: () => setSelectedId(record.id),
-          onDoubleClick: () => {
-            setSelectedId(record.id)
-            setConnectingId(record.id)
-            onConnect(record)
-          }
-        })}
-        locale={{
-          emptyText: (
-            <Empty
-              description="暂无连接"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              style={{ marginTop: '60px' }}
-            />
-          ),
-        }}
-      />
+      <div className="connection-modal-list">{listContent}</div>
     </Modal>
   )
 }

@@ -1,77 +1,118 @@
-/* Modal */
-.ant-modal-header {
-  margin-bottom: 0 !important;
-  padding: 10px 16px !important;
-  border-bottom: 1px solid var(--border-color) !important;
-  background-color: var(--bg-secondary) !important;
-  border-top-left-radius: 8px !important;
-  border-top-right-radius: 8px !important;
+/* ============================================================
+   Scoped antd refinements.
+   NOTE: modal styles are scoped to .rshell-modal to avoid
+   leaking into confirm dialogs and other antd popups.
+   ============================================================ */
+
+/* ---------- Modal (scoped) ---------- */
+.rshell-modal .ant-modal-content {
+  padding: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-overlay);
 }
 
-.ant-modal-title {
-  font-size: 14px !important;
-  font-weight: 600 !important;
-  color: var(--text-primary) !important;
+.rshell-modal .ant-modal-header {
+  margin-bottom: 0;
+  padding: 13px 20px;
+  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
 }
 
-.ant-modal-close {
-  top: 8px !important;
-  right: 8px !important;
+.rshell-modal .ant-modal-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
-.ant-modal {
-  top: 50px;
+.rshell-modal .ant-modal-close {
+  top: 10px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
 }
 
-.ant-table-row-selected > td {
-  background-color: #e6f4ff !important;
+.rshell-modal .ant-modal-close:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
 }
 
-/* Dropdown */
-.ant-dropdown-menu {
-  padding: 4px !important;
-  border: 1px solid var(--border-color) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
-  border-radius: 6px !important;
+.rshell-modal .ant-modal-body {
+  padding: 18px 20px;
 }
 
-.ant-dropdown-menu-item {
-  padding: 5px 8px !important;
-  font-size: 13px !important;
-  border-radius: 4px !important;
-  display: flex !important;
-  align-items: center !important;
+/* Shared footer bar used by our dialogs */
+.rshell-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
 }
 
-.ant-dropdown-menu-item-icon {
-  margin-right: 8px !important;
-  font-size: 14px !important;
+/* ---------- Dropdown menus ---------- */
+.ant-dropdown .ant-dropdown-menu {
+  padding: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: var(--shadow-overlay);
+}
+
+.ant-dropdown .ant-dropdown-menu-item {
+  padding: 5px 10px;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+}
+
+.ant-dropdown .ant-dropdown-menu-item-icon {
+  margin-right: 8px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
-.ant-dropdown-menu-item-danger {
-  color: #ff4d4f !important;
+.ant-dropdown .ant-dropdown-menu-item-active {
+  background-color: var(--bg-hover);
 }
 
-.ant-dropdown-menu-item-danger:hover {
-  color: #ff4d4f !important;
-  background-color: #fff1f0 !important;
+.ant-dropdown .ant-dropdown-menu-item-danger {
+  color: var(--danger);
 }
 
-.ant-dropdown-menu-item-active {
-  background-color: #f0f0f0 !important;
+.ant-dropdown .ant-dropdown-menu-item-danger:hover {
+  color: #fff;
+  background-color: var(--danger);
 }
 
-.ant-dropdown-menu-item-divider {
-  margin: 4px 0 !important;
+.ant-dropdown .ant-dropdown-menu-item-divider {
+  margin: 4px 6px;
 }
 
-/* Tabs */
-.ant-tabs-nav::before {
-  border-bottom: none !important;
+/* ---------- Tooltip ---------- */
+.ant-tooltip .ant-tooltip-inner {
+  font-size: 12px;
+  border-radius: var(--radius-sm);
 }
 
-/* Empty */
+/* ---------- Message ---------- */
+.ant-message .ant-message-notice-content {
+  border-radius: 8px;
+  box-shadow: var(--shadow-overlay);
+}
+
+/* ---------- Empty ---------- */
 .ant-empty-description {
   color: var(--text-tertiary);
+}
+
+/* ---------- Confirm dialog (antd Modal.useModal) ---------- */
+.ant-modal-confirm .ant-modal-content {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-overlay);
 }

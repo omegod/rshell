@@ -1,11 +1,11 @@
 import React from 'react'
-import { Modal, Form, Select, InputNumber, Radio, Space, Button } from 'antd'
-import { DesktopOutlined, SunOutlined, MoonOutlined } from '@ant-design/icons'
+import { Modal, Form, InputNumber, Radio, Button } from 'antd'
+import { SunOutlined, MoonOutlined, DesktopOutlined } from '@ant-design/icons'
 
 import './index.css'
 
 interface Settings {
-  theme: 'light' | 'dark'
+  theme: 'light' | 'dark' | 'system'
   terminalFontSize: number
 }
 
@@ -42,34 +42,16 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   return (
     <Modal
+      className="rshell-modal"
       title="应用设置"
       open={open}
       onCancel={onClose}
       width={400}
       centered
-      styles={{
-        content: {
-          padding: 0,
-        },
-        body: {
-          padding: '24px',
-        }
-      }}
       footer={(
-        <div style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
-          backgroundColor: 'var(--bg-secondary)',
-          padding: '10px 16px',
-          borderTop: '1px solid var(--border-color)',
-          borderBottomLeftRadius: '8px',
-          borderBottomRightRadius: '8px',
-        }}>
-          <Space>
-            <Button onClick={onClose}>取消</Button>
-            <Button type="primary" onClick={handleSave}>保存</Button>
-          </Space>
+        <div className="rshell-modal-footer">
+          <Button onClick={onClose}>取消</Button>
+          <Button type="primary" onClick={handleSave}>保存</Button>
         </div>
       )}
     >
@@ -82,12 +64,15 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
           name="theme"
           label="外观主题"
         >
-          <Radio.Group buttonStyle="solid" style={{ width: '100%' }}>
-            <Radio.Button value="light" style={{ width: '50%', textAlign: 'center' }}>
+          <Radio.Group buttonStyle="solid" style={{ width: '100%', display: 'flex' }}>
+            <Radio.Button value="light" style={{ flex: 1, textAlign: 'center' }}>
               <SunOutlined /> 浅色
             </Radio.Button>
-            <Radio.Button value="dark" style={{ width: '50%', textAlign: 'center' }}>
+            <Radio.Button value="dark" style={{ flex: 1, textAlign: 'center' }}>
               <MoonOutlined /> 深色
+            </Radio.Button>
+            <Radio.Button value="system" style={{ flex: 1, textAlign: 'center' }}>
+              <DesktopOutlined /> 跟随系统
             </Radio.Button>
           </Radio.Group>
         </Form.Item>

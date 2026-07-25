@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Space } from 'antd'
 import { DashboardOutlined, CloudDownloadOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import { SystemStats } from '../../../../shared/types'
 
@@ -10,16 +9,27 @@ interface StatusBarProps {
 
 const StatusBar: React.FC<StatusBarProps> = ({ sessionId, isActive }) => {
   const [stats, setStats] = useState<SystemStats | null>(null)
+  const [unavailable, setUnavailable] = useState(false)
   const [netSpeed, setNetSpeed] = useState<{ up: number; down: number }>({ up: 0, down: 0 })
   const prevNetRef = useRef<{ rx: number; tx: number; time: number } | null>(null)
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
 
   useEffect(() => {
-    const statsInterval = setInterval(async () => {
-      if (!isActiveRef.current) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const poll = async () => {
+      if (cancelled) return
+      if (!isActiveRef.current) {
+        timer = setTimeout(poll, 2000)
+        return
+      }
+
+      let nextDelay = 2000
       try {
         const newStats = await window.api.sessions.stats(sessionId)
+        if (cancelled) return
         const now = Date.now()
         const prev = prevNetRef.current
         let speed = { up: 0, down: 0 }
@@ -35,12 +45,21 @@ const StatusBar: React.FC<StatusBarProps> = ({ sessionId, isActive }) => {
         prevNetRef.current = { rx: newStats.net.rx, tx: newStats.net.tx, time: now }
         setStats(newStats)
         setNetSpeed(speed)
+        setUnavailable(false)
       } catch {
-        // ignore
+        if (cancelled) return
+        setUnavailable(true)
+        nextDelay = 10000
       }
-    }, 2000)
+      timer = setTimeout(poll, nextDelay)
+    }
 
-    return () => clearInterval(statsInterval)
+    poll()
+
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
   }, [sessionId])
 
   const formatSpeed = (bytesPerSec: number) => {
@@ -50,44 +69,33 @@ const StatusBar: React.FC<StatusBarProps> = ({ sessionId, isActive }) => {
   }
 
   return (
-    <div style={{
-      height: '24px',
-      backgroundColor: '#2d2d2d',
-      borderTop: '1px solid #333',
-      display: 'flex',
-      alignItems: 'center',
-      padding: '0 12px',
-      fontSize: '11px',
-      color: '#aaa',
-      justifyContent: 'space-between',
-      flexShrink: 0
-    }}>
+    <div className="terminal-status-bar">
       {stats ? (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <Space size={4}>
-              <DashboardOutlined style={{ fontSize: '12px' }} />
-              <span>CPU: {stats.cpu.toFixed(1)}%</span>
-            </Space>
-            <Space size={4}>
-              <span style={{ opacity: 0.8 }}>MEM:</span>
-              <span>{stats.mem.used} / {stats.mem.total} MB</span>
-              <span style={{ opacity: 0.6 }}>({((stats.mem.used / stats.mem.total) * 100).toFixed(0)}%)</span>
-            </Space>
+          <div className="status-group">
+            <span className="status-item">
+              <DashboardOutlined />
+              <span>CPU <span className="status-item-value">{stats.cpu.toFixed(1)}%</span></span>
+            </span>
+            <span className="status-item">
+              <span>MEM <span className="status-item-value">{stats.mem.used} / {stats.mem.total} MB ({((stats.mem.used / stats.mem.total) * 100).toFixed(0)}%)</span></span>
+            </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Space size={4}>
-              <CloudDownloadOutlined style={{ color: '#52c41a' }} />
-              <span>{formatSpeed(netSpeed.down)}</span>
-            </Space>
-            <Space size={4}>
-              <CloudUploadOutlined style={{ color: '#1677ff' }} />
-              <span>{formatSpeed(netSpeed.up)}</span>
-            </Space>
+          <div className="status-group">
+            <span className="status-item">
+              <CloudDownloadOutlined className="status-down" />
+              <span className="status-item-value">{formatSpeed(netSpeed.down)}</span>
+            </span>
+            <span className="status-item">
+              <CloudUploadOutlined className="status-up" />
+              <span className="status-item-value">{formatSpeed(netSpeed.up)}</span>
+            </span>
           </div>
         </>
+      ) : unavailable ? (
+        <div className="status-hint">系统监控不可用（仅支持 Linux）</div>
       ) : (
-        <div style={{ opacity: 0.5 }}>系统监控不可用 (仅支持 Linux)</div>
+        <div className="status-hint">正在读取系统状态…</div>
       )}
     </div>
   )

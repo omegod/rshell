@@ -1,14 +1,16 @@
-import { app, shell, BrowserWindow, Menu, nativeTheme, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, Menu, nativeTheme } from 'electron'
 import { join } from 'node:path'
 import { IPCManager } from './ipc.js'
 
 // 禁用自动填充以减少开发工具中的内部报错 (如 Autofill.setAddresses failed)
 app.commandLine.appendSwitch('disable-autofill')
 app.commandLine.appendSwitch('disable-features', 'AutofillServerCommunication')
+if (process.env['RSHELL_REMOTE_DEBUGGING_PORT']) {
+  app.commandLine.appendSwitch('remote-debugging-port', process.env['RSHELL_REMOTE_DEBUGGING_PORT'])
+}
 
 let mainWindow: BrowserWindow | null = null
 let ipcManager: IPCManager | null = null
-let isQuitting = false
 
 function createWindow(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -24,19 +26,16 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1080,
     height: 700,
-    minWidth: 1080,
-    minHeight: 700,
+    minWidth: 840,
+    minHeight: 560,
     title: 'RShell',
     icon: iconPath,
     show: false,
-    frame: false,
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 12, y: 12 },
     webPreferences: {
-      preload: join(__dirname, '../preload/index.mjs'),
+      preload: join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#ffffff',
   })
@@ -52,61 +51,19 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    try {
+      const url = new URL(details.url)
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        shell.openExternal(details.url)
+      }
+    } catch {
+      // Ignore malformed links from terminal output.
+    }
     return { action: 'deny' }
   })
 
-  ipcMain.on('sessions:connect-and-setup', async (_event, configId: string) => {
-    if (!ipcManager || !mainWindow) return
-    try {
-      const session = await ipcManager.openSession(configId)
-      mainWindow.webContents.send('sessions:connected', session)
-    } catch (err) {
-      mainWindow.webContents.send('sessions:connect-error', {
-        configId,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-  })
-
-  ipcMain.handle('sessions:open-shell', async (_event, sessionId: string, size: { cols: number; rows: number }) => {
-    if (!ipcManager || !mainWindow) return
-    ipcManager.setupShellCallbacks(sessionId, mainWindow, size)
-  })
-
-  ipcMain.handle('window:minimize', () => {
-    mainWindow?.minimize()
-  })
-
-  ipcMain.handle('window:maximize', () => {
-    if (mainWindow?.isMaximized()) {
-      mainWindow.unmaximize()
-    } else {
-      mainWindow?.maximize()
-    }
-  })
-
-  ipcMain.handle('window:close', () => {
-    if (process.platform === 'darwin') {
-      mainWindow?.hide()
-    } else {
-      mainWindow?.close()
-    }
-  })
-
-  mainWindow.on('close', (event) => {
-    if (process.platform === 'darwin' && !isQuitting) {
-      event.preventDefault()
-      mainWindow?.hide()
-    }
-  })
-
   mainWindow.on('closed', () => {
-    ipcMain.removeAllListeners('sessions:connect-and-setup')
-    ipcMain.removeHandler('sessions:open-shell')
-    ipcMain.removeHandler('window:minimize')
-    ipcMain.removeHandler('window:maximize')
-    ipcMain.removeHandler('window:close')
+    ipcManager?.dispose()
     mainWindow = null
     ipcManager = null
   })
@@ -206,6 +163,5 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  isQuitting = true
   ipcManager?.disconnectAll()
 })

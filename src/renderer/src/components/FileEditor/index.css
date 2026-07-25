@@ -4,3 +4,80 @@
   display: flex;
   flex-direction: column;
 }
+
+.editor-header {
+  height: 44px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.editor-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.editor-header-icon {
+  color: var(--text-secondary);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.editor-header-path {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'SF Mono', Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+.editor-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.editor-error-state {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+}
+
+.editor-error-icon {
+  font-size: 40px;
+  color: var(--warning);
+  margin-bottom: 14px;
+}
+
+.editor-error-title {
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.editor-statusbar {
+  height: 24px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--terminal-status);
+  border-top: 1px solid var(--terminal-status-border);
+  color: var(--terminal-status-text);
+  font-size: 11px;
+  flex-shrink: 0;
+  user-select: none;
+}

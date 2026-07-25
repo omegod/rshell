@@ -1,34 +1,38 @@
 import { useCallback, useRef } from 'react'
 import { message } from 'antd'
 import { FileInfo } from '../../../shared/types'
-import { useSessionStore, TransferItem } from '../store/useSessionStore'
+import { useSessionStore } from '../store/useSessionStore'
 
 export function useFileActions(sessionId: string) {
-  const {
-    sessions,
-    setFiles,
-    updateChildren,
-    setLoadedKeys,
-    upsertFile,
-    removeFile,
-    upsertChildFile,
-    removeChildFile,
-    addTransfer,
-    updateTransfer,
-  } = useSessionStore()
-
-  const sessionState = sessions[sessionId] || { currentPath: '~', files: [], childrenMap: {}, loadedKeys: [] }
+  const sessionState = useSessionStore((state) => state.sessions[sessionId])
+    || { currentPath: '~', files: [], childrenMap: {}, loadedKeys: [], expandedKeys: [] }
+  const setFiles = useSessionStore((state) => state.setFiles)
+  const updateChildren = useSessionStore((state) => state.updateChildren)
+  const setLoadedKeys = useSessionStore((state) => state.setLoadedKeys)
+  const upsertFile = useSessionStore((state) => state.upsertFile)
+  const removeFile = useSessionStore((state) => state.removeFile)
+  const upsertChildFile = useSessionStore((state) => state.upsertChildFile)
+  const removeChildFile = useSessionStore((state) => state.removeChildFile)
+  const addTransfer = useSessionStore((state) => state.addTransfer)
+  const updateTransfer = useSessionStore((state) => state.updateTransfer)
   const currentPath = sessionState.currentPath
   const childrenMap = sessionState.childrenMap
-  const loadingDirs = useRef<Set<string>>(new Set())
+  const loadingDirs = useRef<Map<string, Promise<FileInfo[] | null>>>(new Map())
+  const listRequestRef = useRef(0)
 
-  const loadFiles = useCallback(async (path: string) => {
+  const loadFiles = useCallback(async (path: string): Promise<boolean> => {
+    const requestId = ++listRequestRef.current
     try {
       const fileList = await window.api.files.list(sessionId, path)
+      const activePath = useSessionStore.getState().sessions[sessionId]?.currentPath
+      if (requestId !== listRequestRef.current || activePath !== path) return false
       setFiles(sessionId, fileList)
       setLoadedKeys(sessionId, ['__root__'])
+      return true
     } catch (err) {
+      if (requestId !== listRequestRef.current) return false
       message.error(`加载文件失败: ${err instanceof Error ? err.message : '未知错误'}`)
+      return false
     }
   }, [sessionId, setFiles, setLoadedKeys])
 
@@ -41,19 +45,28 @@ export function useFileActions(sessionId: string) {
     }
   }, [sessionId, setFiles])
 
-  const loadDirChildren = useCallback(async (dirPath: string): Promise<FileInfo[]> => {
-    if (loadingDirs.current.has(dirPath)) return []
-    loadingDirs.current.add(dirPath)
-    try {
-      const fileList = await window.api.files.list(sessionId, dirPath)
-      updateChildren(sessionId, dirPath, fileList)
-      return fileList
-    } catch (err) {
-      message.error(`加载目录失败: ${err instanceof Error ? err.message : '未知错误'}`)
-      return []
-    } finally {
-      loadingDirs.current.delete(dirPath)
-    }
+  const loadDirChildren = useCallback((dirPath: string): Promise<FileInfo[] | null> => {
+    // Share the in-flight request: rc-tree can trigger loadData multiple
+    // times for one expansion (StrictMode double-invoked setState updater
+    // plus TreeNode's load effect). Every caller must await the SAME real
+    // request, otherwise a fast null return ends the loading state early
+    // and the spinner flickers on and off.
+    const inFlight = loadingDirs.current.get(dirPath)
+    if (inFlight) return inFlight
+    const request = (async () => {
+      try {
+        const fileList = await window.api.files.list(sessionId, dirPath)
+        updateChildren(sessionId, dirPath, fileList)
+        return fileList
+      } catch (err) {
+        message.error(`加载目录失败: ${err instanceof Error ? err.message : '未知错误'}`)
+        return null
+      } finally {
+        loadingDirs.current.delete(dirPath)
+      }
+    })()
+    loadingDirs.current.set(dirPath, request)
+    return request
   }, [sessionId, updateChildren])
 
   const addFileItem = useCallback(async (filePath: string) => {
@@ -80,12 +93,13 @@ export function useFileActions(sessionId: string) {
     const uploadPath = targetDirPath || currentPath
     const localPath = await window.api.app.pickFile({ title: '选择文件' })
     if (!localPath) return
-    const fileName = localPath.split('/').pop() || ''
+    const fileName = localPath.split(/[\\/]/).pop() || ''
     const remotePath = uploadPath === '/' ? `/${fileName}` : `${uploadPath}/${fileName}`
-    const id = `upload_${Date.now()}`
+    const id = `upload_${crypto.randomUUID()}`
 
     addTransfer({
       id,
+      sessionId,
       fileName,
       direction: 'upload',
       progress: 0,
@@ -117,10 +131,11 @@ export function useFileActions(sessionId: string) {
   const handleDownload = useCallback(async (file: FileInfo) => {
     const localPath = await window.api.app.saveFile({ title: '保存文件', defaultPath: file.name })
     if (!localPath) return
-    const id = `download_${Date.now()}`
+    const id = `download_${crypto.randomUUID()}`
 
     addTransfer({
       id,
+      sessionId,
       fileName: file.name,
       direction: 'download',
       progress: 0,

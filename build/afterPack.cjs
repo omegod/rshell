@@ -38,13 +38,13 @@ exports.default = async (context) => {
   const appOutDir = context.appOutDir;
   let removed = 0;
 
-  if (process.platform === "darwin") {
+  if (context.electronPlatformName === "darwin") {
     const fwRes = path.join(
       appOutDir,
       "RShell.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources"
     );
     removed += pruneLproj(fwRes);
-  } else if (process.platform === "win32") {
+  } else if (context.electronPlatformName === "win32") {
     removed += pruneWindowsLocales(path.join(appOutDir, "locales"));
   }
 

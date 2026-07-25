@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { RShellApi, SSHConnectionConfig, Session, TerminalSize } from '../shared/types'
+import { RShellApi, SSHConnectionConfig, TerminalSize } from '../shared/types'
 
 const api: RShellApi = {
   connections: {
@@ -10,10 +10,7 @@ const api: RShellApi = {
     test: (config) => ipcRenderer.invoke('connections:test', config),
   },
   sessions: {
-    open: (configId: string) => {
-      ipcRenderer.send('sessions:connect-and-setup', configId)
-      return Promise.resolve({} as Session)
-    },
+    open: (configId: string) => ipcRenderer.invoke('sessions:open', configId),
     openShell: (sessionId: string, size: TerminalSize) => ipcRenderer.invoke('sessions:open-shell', sessionId, size),
     close: (sessionId: string) => ipcRenderer.invoke('sessions:close', sessionId),
     list: () => ipcRenderer.invoke('sessions:list'),
@@ -30,6 +27,7 @@ const api: RShellApi = {
     mkdir: (sessionId: string, path: string) => ipcRenderer.invoke('files:mkdir', sessionId, path),
     rename: (sessionId: string, oldPath: string, newPath: string) => ipcRenderer.invoke('files:rename', sessionId, oldPath, newPath),
     stat: (sessionId: string, path: string) => ipcRenderer.invoke('files:stat', sessionId, path),
+    resolve: (sessionId: string, path: string) => ipcRenderer.invoke('files:resolve', sessionId, path),
     read: (sessionId: string, path: string) => ipcRenderer.invoke('files:read', sessionId, path),
     write: (sessionId: string, path: string, content: string) => ipcRenderer.invoke('files:write', sessionId, path, content),
     cancel: (transferId: string) => ipcRenderer.invoke('files:cancel', transferId),
@@ -50,16 +48,8 @@ ipcRenderer.on('shell:close', (_event, sessionId: string) => {
   window.dispatchEvent(new CustomEvent('shell:close', { detail: { sessionId } }))
 })
 
-ipcRenderer.on('files:progress', (_event, data: { id: string; percent: number }) => {
+ipcRenderer.on('files:progress', (_event, data: { sessionId: string; id: string; percent: number; speed: number }) => {
   window.dispatchEvent(new CustomEvent('files:progress', { detail: data }))
-})
-
-ipcRenderer.on('sessions:connected', (_event, session: Session) => {
-  window.dispatchEvent(new CustomEvent('sessions:connected', { detail: session }))
-})
-
-ipcRenderer.on('sessions:connect-error', (_event, error: { configId: string; error: string }) => {
-  window.dispatchEvent(new CustomEvent('sessions:connect-error', { detail: error }))
 })
 
 ipcRenderer.on('menu:new-connection', () => {

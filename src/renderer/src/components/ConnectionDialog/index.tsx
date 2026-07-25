@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Modal, Form, Input, InputNumber, Select, Button, Space, message } from 'antd'
-import { SSHConnectionConfig, Session } from '../../../../shared/types'
-import { KeyOutlined, LockOutlined, UserOutlined, CloudOutlined } from '@ant-design/icons'
+import { Modal, Form, Input, InputNumber, Select, Button, message } from 'antd'
+import { SSHConnectionConfig } from '../../../../shared/types'
+import { KeyOutlined, LockOutlined, UserOutlined } from '@ant-design/icons'
 
 import './index.css'
 
@@ -9,8 +9,8 @@ interface ConnectionDialogProps {
   open: boolean
   editingConfig: SSHConnectionConfig | null
   onClose: () => void
-  onConnect: (config: SSHConnectionConfig) => void
-  onSave: (config: SSHConnectionConfig) => Promise<void>
+  onConnect: (config: SSHConnectionConfig) => Promise<void>
+  onSave: (config: SSHConnectionConfig) => Promise<SSHConnectionConfig>
 }
 
 const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
@@ -90,46 +90,10 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
         updatedAt: editingConfig?.updatedAt || '',
       }
 
-      if (!editingConfig) {
-        const saved = await window.api.connections.save(config)
-        config.id = saved.id
-      }
-
-      onConnect(config)
-
-      const configId = config.id
-      await new Promise<void>((resolve, reject) => {
-        let timer: ReturnType<typeof setTimeout> | null = null
-        const onConnected = (e: Event) => {
-          const session = (e as CustomEvent).detail as Session
-          if (session.configId === configId) {
-            cleanup()
-            resolve()
-          }
-        }
-        const onError = (e: Event) => {
-          const { configId: id, error } = (e as CustomEvent).detail as { configId: string; error: string }
-          if (id === configId) {
-            cleanup()
-            reject(new Error(error))
-          }
-        }
-        const cleanup = () => {
-          if (timer) clearTimeout(timer)
-          window.removeEventListener('sessions:connected', onConnected)
-          window.removeEventListener('sessions:connect-error', onError)
-        }
-        timer = setTimeout(() => {
-          cleanup()
-          reject(new Error('连接超时'))
-        }, 15000)
-        window.addEventListener('sessions:connected', onConnected)
-        window.addEventListener('sessions:connect-error', onError)
-      })
+      const saved = await onSave(config)
+      await onConnect(saved)
     } catch (err) {
-      if (err instanceof Error) {
-        messageApi.error(err.message)
-      }
+      // Connection errors are reported by the app-level handler.
     } finally {
       setConnecting(false)
     }
@@ -155,6 +119,7 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
       }
 
       await onSave(config)
+      messageApi.success('保存成功')
       onClose()
     } catch (err) {
       if (err instanceof Error) {
@@ -182,44 +147,26 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
 
   return (
     <Modal
+      className="rshell-modal"
       title={editingConfig ? '编辑连接' : '新建连接'}
       open={open}
       onCancel={onClose}
-      width={540}
+      width={520}
       centered
-      styles={{
-        content: {
-          padding: 0,
-        },
-        body: {
-          padding: '20px 24px',
-        }
-      }}
       footer={(
-        <div style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
-          backgroundColor: 'var(--bg-secondary)',
-          padding: '10px 16px',
-          borderTop: '1px solid var(--border-color)',
-          borderBottomLeftRadius: '8px',
-          borderBottomRightRadius: '8px',
-        }}>
-          <Space>
-            <Button key="cancel" onClick={onClose}>
-              取消
-            </Button>
-            <Button key="test" onClick={handleTest} loading={testing}>
-              测试连接
-            </Button>
-            <Button key="save" onClick={handleSave} loading={saving}>
-              保存
-            </Button>
-            <Button key="connect" type="primary" onClick={handleConnect} loading={connecting}>
-              连接
-            </Button>
-          </Space>
+        <div className="rshell-modal-footer">
+          <Button key="cancel" onClick={onClose}>
+            取消
+          </Button>
+          <Button key="test" onClick={handleTest} loading={testing}>
+            测试连接
+          </Button>
+          <Button key="save" onClick={handleSave} loading={saving}>
+            保存
+          </Button>
+          <Button key="connect" type="primary" onClick={handleConnect} loading={connecting}>
+            连接
+          </Button>
         </div>
       )}
     >
@@ -240,12 +187,12 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
           <Input placeholder="我的服务器" />
         </Form.Item>
 
-        <Space style={{ width: '100%' }}>
+        <div className="form-row">
           <Form.Item
             name="host"
             label="主机地址"
             rules={[{ required: true, message: '请输入主机地址' }]}
-            style={{ flex: 1 }}
+            className="form-row-grow"
           >
             <Input placeholder="192.168.1.100 或 example.com" />
           </Form.Item>
@@ -254,11 +201,11 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
             name="port"
             label="端口"
             rules={[{ required: true, message: '请输入端口' }]}
-            style={{ width: 100 }}
+            className="form-row-port"
           >
             <InputNumber min={1} max={65535} style={{ width: '100%' }} />
           </Form.Item>
-        </Space>
+        </div>
 
         <Form.Item
           name="username"

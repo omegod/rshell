@@ -1,7 +1,10 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { app } from 'electron'
+import { randomUUID } from 'node:crypto'
+import { app, safeStorage } from 'electron'
 import { SSHConnectionConfig } from '../../shared/types.js'
+
+const ENCRYPTED_PREFIX = 'safeStorage:v1:'
 
 export class ConnectionStore {
   private storePath: string
@@ -17,7 +20,23 @@ export class ConnectionStore {
     try {
       if (fs.existsSync(this.storePath)) {
         const data = fs.readFileSync(this.storePath, 'utf-8')
-        this.connections = JSON.parse(data)
+        const parsed: unknown = JSON.parse(data)
+        if (!Array.isArray(parsed)) {
+          throw new Error('Invalid connections file')
+        }
+        const configs = parsed as SSHConnectionConfig[]
+        const needsMigration = configs.some((config) =>
+          (config.password && !config.password.startsWith(ENCRYPTED_PREFIX))
+          || (config.passphrase && !config.passphrase.startsWith(ENCRYPTED_PREFIX))
+        )
+        this.connections = configs.map((config) => this.deserialize(config))
+        if (needsMigration) {
+          try {
+            this.save()
+          } catch (err) {
+            console.error('Failed to migrate stored credentials:', err)
+          }
+        }
       } else {
         this.connections = []
       }
@@ -28,14 +47,48 @@ export class ConnectionStore {
   }
 
   private save(): void {
+    const dir = path.dirname(this.storePath)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
+
+    const tempPath = `${this.storePath}.tmp`
+    const serialized = this.connections.map((config) => this.serialize(config))
+    fs.writeFileSync(tempPath, JSON.stringify(serialized, null, 2), { encoding: 'utf-8', mode: 0o600 })
+    fs.renameSync(tempPath, this.storePath)
+  }
+
+  private encryptSecret(value?: string): string | undefined {
+    if (!value) return undefined
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error('System credential encryption is unavailable')
+    }
+    return `${ENCRYPTED_PREFIX}${safeStorage.encryptString(value).toString('base64')}`
+  }
+
+  private decryptSecret(value?: string): string | undefined {
+    if (!value || !value.startsWith(ENCRYPTED_PREFIX)) return value
     try {
-      const dir = path.dirname(this.storePath)
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true })
-      }
-      fs.writeFileSync(this.storePath, JSON.stringify(this.connections, null, 2), 'utf-8')
+      return safeStorage.decryptString(Buffer.from(value.slice(ENCRYPTED_PREFIX.length), 'base64'))
     } catch (err) {
-      console.error('Failed to save connections:', err)
+      console.error('Failed to decrypt stored credential:', err)
+      return undefined
+    }
+  }
+
+  private serialize(config: SSHConnectionConfig): SSHConnectionConfig {
+    return {
+      ...config,
+      password: this.encryptSecret(config.password),
+      passphrase: this.encryptSecret(config.passphrase),
+    }
+  }
+
+  private deserialize(config: SSHConnectionConfig): SSHConnectionConfig {
+    return {
+      ...config,
+      password: this.decryptSecret(config.password),
+      passphrase: this.decryptSecret(config.passphrase),
     }
   }
 
@@ -48,6 +101,7 @@ export class ConnectionStore {
   }
 
   save_connection(config: SSHConnectionConfig): SSHConnectionConfig {
+    const previous = [...this.connections]
     const existingIndex = this.connections.findIndex((c) => c.id === config.id)
 
     if (existingIndex >= 0) {
@@ -58,22 +112,33 @@ export class ConnectionStore {
     } else {
       const newConfig: SSHConnectionConfig = {
         ...config,
-        id: config.id || `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: config.id || `conn_${randomUUID()}`,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
       this.connections.push(newConfig)
     }
 
-    this.save()
+    try {
+      this.save()
+    } catch (err) {
+      this.connections = previous
+      throw err
+    }
     return this.connections.find((c) => c.id === (config.id || this.connections[this.connections.length - 1].id))!
   }
 
   delete(id: string): boolean {
+    const previous = this.connections
     const initialLength = this.connections.length
     this.connections = this.connections.filter((c) => c.id !== id)
     if (this.connections.length < initialLength) {
-      this.save()
+      try {
+        this.save()
+      } catch (err) {
+        this.connections = previous
+        throw err
+      }
       return true
     }
     return false

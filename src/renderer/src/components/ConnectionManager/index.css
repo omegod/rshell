@@ -1,1 +1,158 @@
-/* reserved */
+/* ---------- Home (embedded) ---------- */
+.connection-home {
+  height: 100%;
+  overflow: auto;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.connection-home-inner {
+  width: min(640px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 52px 0 32px;
+}
+
+.connection-home-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+  padding: 0 2px;
+}
+
+.connection-home-header h1 {
+  margin: 0 0 3px;
+  font-size: 21px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.connection-home-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.connection-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* ---------- Grouped list ---------- */
+.connection-list-panel {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.connection-modal-list {
+  max-height: 336px;
+  overflow-y: auto;
+  margin: -2px -4px;
+  padding: 2px 4px;
+}
+
+.connection-list-state {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.connection-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.1s ease;
+}
+
+.connection-row + .connection-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border-color);
+  pointer-events: none;
+}
+
+.connection-row:hover {
+  background: var(--bg-hover);
+}
+
+.connection-row.selected {
+  background: var(--bg-selected);
+}
+
+.connection-row.selected:hover {
+  background: var(--bg-selected);
+}
+
+.connection-row-icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.connection-row.selected .connection-row-icon {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.connection-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.connection-row-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-row-meta {
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-row-trailing {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+@media (max-width: 700px) {
+  .connection-home-inner {
+    width: calc(100% - 32px);
+    padding-top: 32px;
+  }
+
+  .connection-home-header {
+    align-items: center;
+  }
+}

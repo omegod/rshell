@@ -2,6 +2,8 @@ import { Client, ConnectConfig, SFTPWrapper, ClientChannel } from 'ssh2'
 import { SSHConnectionConfig, TerminalSize, FileInfo } from '../../shared/types.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { StringDecoder } from 'node:string_decoder'
 
 export interface SSHSession {
   id: string
@@ -45,7 +47,7 @@ export class SSHService {
       }
 
       client.on('ready', () => {
-        const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const sessionId = `session_${randomUUID()}`
 
         client.sftp((err, sftp) => {
           if (err) {
@@ -121,7 +123,7 @@ export class SSHService {
             session.connected = false
           })
 
-          stream.on('error', (err) => {
+          stream.on('error', (err: Error) => {
             reject(new Error(`Shell error: ${err}`))
           })
 
@@ -148,8 +150,14 @@ export class SSHService {
   onShellData(sessionId: string, callback: (data: string) => void): void {
     const session = this.sessions.get(sessionId)
     if (session?.shell) {
+      const decoder = new StringDecoder('utf8')
       session.shell.on('data', (data: Buffer) => {
-        callback(data.toString('utf-8'))
+        const decoded = decoder.write(data)
+        if (decoded) callback(decoded)
+      })
+      session.shell.once('close', () => {
+        const remaining = decoder.end()
+        if (remaining) callback(remaining)
       })
     }
   }
@@ -203,6 +211,10 @@ export class SSHService {
     return path.posix.join(home, remotePath.slice(2))
   }
 
+  resolveRemotePath(sessionId: string, remotePath: string): Promise<string> {
+    return this.resolvePath(sessionId, remotePath)
+  }
+
   async listFiles(sessionId: string, remotePath: string): Promise<import('../../shared/types').FileInfo[]> {
     const session = this.sessions.get(sessionId)
     if (!session || !session.connected) {
@@ -253,7 +265,7 @@ export class SSHService {
     })
   }
 
-  private transfers: Map<string, { readStream: NodeJS.ReadableStream; writeStream: NodeJS.WritableStream }> = new Map()
+  private transfers = new Map<string, { cancel: () => void }>()
 
   async uploadFile(sessionId: string, localPath: string, remotePath: string, transferId: string, onProgress?: (percent: number, bytesPerSec: number) => void): Promise<void> {
     const session = this.sessions.get(sessionId)
@@ -264,7 +276,13 @@ export class SSHService {
     const resolvedRemotePath = await this.resolvePath(sessionId, remotePath)
 
     return new Promise((resolve, reject) => {
-      const stat = fs.statSync(localPath)
+      let stat: fs.Stats
+      try {
+        stat = fs.statSync(localPath)
+      } catch (err) {
+        reject(new Error(`Read local file failed: ${err}`))
+        return
+      }
       if (!stat.isFile()) {
         reject(new Error('Local path is not a file'))
         return
@@ -275,18 +293,35 @@ export class SSHService {
       let lastTime = Date.now()
       let lastBytes = 0
       let aborted = false
+      let settled = false
       const readStream = fs.createReadStream(localPath)
       const writeStream = session.sftp.createWriteStream(resolvedRemotePath)
-
-      this.transfers.set(transferId, { readStream, writeStream })
 
       const cleanup = () => {
         this.transfers.delete(transferId)
       }
 
-      readStream.on('data', (chunk: Buffer) => {
+      const fail = (error: Error) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        readStream.destroy()
+        writeStream.destroy()
+        session.sftp.unlink(resolvedRemotePath, () => {})
+        reject(error)
+      }
+
+      const cancel = () => {
+        if (settled) return
+        aborted = true
+        fail(new Error('Cancelled'))
+      }
+
+      this.transfers.set(transferId, { cancel })
+
+      readStream.on('data', (chunk: string | Buffer) => {
         if (aborted) return
-        transferred += chunk.length
+        transferred += Buffer.byteLength(chunk)
         const now = Date.now()
         const dt = (now - lastTime) / 1000
         if (dt >= 0.3) {
@@ -300,30 +335,20 @@ export class SSHService {
       })
 
       writeStream.on('close', () => {
+        if (settled || aborted) return
+        settled = true
         cleanup()
-        if (aborted) {
-          reject(new Error('Cancelled'))
-        } else {
-          resolve(transferId)
-        }
+        if (onProgress && totalSize > 0) onProgress(100, 0)
+        resolve()
       })
 
-      writeStream.on('error', (err) => {
-        cleanup()
-        if (!aborted) reject(new Error(`Upload failed: ${err}`))
+      writeStream.on('error', (err: Error) => {
+        if (!aborted) fail(new Error(`Upload failed: ${err.message}`))
       })
 
       readStream.on('error', (err) => {
-        cleanup()
-        if (!aborted) reject(new Error(`Read local file failed: ${err}`))
+        if (!aborted) fail(new Error(`Read local file failed: ${err.message}`))
       })
-
-      ;(writeStream as any)._cancel = () => {
-        aborted = true
-        readStream.destroy()
-        writeStream.destroy()
-        cleanup()
-      }
 
       readStream.pipe(writeStream)
     })
@@ -353,12 +378,29 @@ export class SSHService {
       let lastTime = Date.now()
       let lastBytes = 0
       let aborted = false
-
-      this.transfers.set(transferId, { readStream, writeStream })
+      let settled = false
 
       const cleanup = () => {
         this.transfers.delete(transferId)
       }
+
+      const fail = (error: Error) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        readStream.destroy()
+        writeStream.destroy()
+        fs.rm(localPath, { force: true }, () => {})
+        reject(error)
+      }
+
+      const cancel = () => {
+        if (settled) return
+        aborted = true
+        fail(new Error('Cancelled'))
+      }
+
+      this.transfers.set(transferId, { cancel })
 
       readStream.on('data', (chunk: Buffer) => {
         if (aborted) return
@@ -376,33 +418,20 @@ export class SSHService {
       })
 
       writeStream.on('close', () => {
+        if (settled || aborted) return
+        settled = true
         cleanup()
-        if (aborted) {
-          reject(new Error('Cancelled'))
-        } else {
-          if (onProgress && totalSize > 0) {
-            onProgress(100, 0)
-          }
-          resolve()
-        }
+        if (onProgress && totalSize > 0) onProgress(100, 0)
+        resolve()
       })
 
       writeStream.on('error', (err) => {
-        cleanup()
-        if (!aborted) reject(new Error(`Write local file failed: ${err}`))
+        if (!aborted) fail(new Error(`Write local file failed: ${err.message}`))
       })
 
-      readStream.on('error', (err) => {
-        cleanup()
-        if (!aborted) reject(new Error(`Download failed: ${err}`))
+      readStream.on('error', (err: Error) => {
+        if (!aborted) fail(new Error(`Download failed: ${err.message}`))
       })
-
-      ;(writeStream as any)._cancel = () => {
-        aborted = true
-        readStream.destroy()
-        writeStream.destroy()
-        cleanup()
-      }
 
       readStream.pipe(writeStream)
     })
@@ -411,7 +440,7 @@ export class SSHService {
   cancelTransfer(transferId: string): void {
     const transfer = this.transfers.get(transferId)
     if (transfer) {
-      ;(transfer.writeStream as any)._cancel?.()
+      transfer.cancel()
     }
   }
 
@@ -575,42 +604,69 @@ export class SSHService {
       throw new Error('Session not connected')
     }
 
-    // 优化后的监控脚本：
-    // CPU: 使用 top 获取当前空闲比例并反算
-    // Mem: 使用 free -m
-    // Net: 使用 /proc/net/dev 排除 lo，先处理冒号分隔符确保列索引准确
     const script = `
+      export LC_ALL=C
+      if [ "$(uname -s 2>/dev/null)" != "Linux" ]; then
+        printf "UNSUPPORTED\\n"
+        exit 0
+      fi
       cpu_idle=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk '{print $1}')
       cpu_usage=$(awk "BEGIN {print 100 - $cpu_idle}")
-      
       mem_info=$(free -m | awk '/Mem:/ {print $3","$2}')
-      
       net_info=$(awk -F: '/:/ && !/lo:/ {split($2, a, " "); rx += a[1]; tx += a[9]} END {print rx+0","tx+0}' /proc/net/dev)
-      
       printf "%.1f|%s|%s\\n" "$cpu_usage" "$mem_info" "$net_info"
     `
 
     return new Promise((resolve, reject) => {
+      let settled = false
+      let channel: ClientChannel | null = null
+      const finish = (error?: Error, value?: { cpu: number; mem: { used: number; total: number }; net: { rx: number; tx: number } }) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        if (error) reject(error)
+        else if (value) resolve(value)
+      }
+      const timer = setTimeout(() => {
+        channel?.close()
+        finish(new Error('System monitoring timed out'))
+      }, 5000)
+
       session.client.exec(script, (err, stream) => {
-        if (err) return reject(err)
+        if (err) {
+          finish(err)
+          return
+        }
+        channel = stream
         let output = ''
+        let stderr = ''
         stream.on('data', (data: Buffer) => { output += data.toString() })
+        stream.stderr.on('data', (data: Buffer) => { stderr += data.toString() })
+        stream.on('error', (streamError: Error) => finish(streamError))
         stream.on('close', () => {
           try {
-            const parts = output.trim().split('|')
-            if (parts.length < 3) return reject(new Error('Invalid output format'))
-            
-            const cpu = parseFloat(parts[0]) || 0
+            const trimmed = output.trim()
+            if (trimmed === 'UNSUPPORTED') {
+              finish(new Error('System monitoring is only available on Linux'))
+              return
+            }
+            const parts = trimmed.split('|')
+            if (parts.length < 3) throw new Error(stderr.trim() || 'Invalid output format')
+
+            const cpu = parseFloat(parts[0])
             const [memUsed, memTotal] = parts[1].split(',').map(Number)
             const [rx, tx] = parts[2].split(',').map(Number)
-            
-            resolve({
-              cpu,
+
+            if (![cpu, memUsed, memTotal, rx, tx].every(Number.isFinite) || memTotal <= 0) {
+              throw new Error('Invalid system monitoring values')
+            }
+            finish(undefined, {
+              cpu: Math.max(0, Math.min(100, cpu)),
               mem: { used: memUsed, total: memTotal },
-              net: { rx: rx || 0, tx: tx || 0 }
+              net: { rx, tx }
             })
-          } catch (e) {
-            reject(new Error('Failed to parse stats output: ' + output))
+          } catch (parseError) {
+            finish(new Error(`Failed to read system stats: ${parseError instanceof Error ? parseError.message : output}`))
           }
         })
       })
@@ -684,10 +740,10 @@ export class SSHService {
 
   private rmdirRecursive(session: SSHSession, remotePath: string, callback: (err: Error | null) => void): void {
     let called = false
-    const done = (err: Error | null) => {
+    const done = (err?: Error | null) => {
       if (called) return
       called = true
-      callback(err)
+      callback(err ?? null)
     }
 
     session.sftp.readdir(remotePath, (err, rawList) => {

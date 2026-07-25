@@ -1,8 +1,15 @@
+.terminal-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--terminal-bg);
+}
+
 .terminal-container {
   flex: 1;
   min-height: 0;
   position: relative;
-  background-color: #1e1e1e;
+  background-color: var(--terminal-bg);
   overflow: hidden;
 }
 
@@ -24,9 +31,61 @@
 
 .xterm {
   height: 100%;
-  padding: 12px;
+  padding: 8px 10px;
 }
 
 .xterm-viewport {
   overflow-y: auto !important;
+}
+
+/* ---------- Status bar ---------- */
+.terminal-status-bar {
+  height: var(--statusbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding: 0 12px;
+  border-top: 1px solid var(--terminal-status-border);
+  background: var(--terminal-status);
+  color: var(--terminal-status-text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.status-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.status-item .anticon {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.status-item .status-down {
+  color: var(--success);
+  opacity: 1;
+}
+
+.status-item .status-up {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.status-item-value {
+  color: #d6d6da;
+}
+
+.status-hint {
+  opacity: 0.55;
 }

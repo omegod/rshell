@@ -97,8 +97,10 @@ export type IPCChannel =
   | 'files:mkdir'
   | 'files:rename'
   | 'files:stat'
+  | 'files:resolve'
   | 'files:read'
   | 'files:write'
+  | 'files:cancel'
   | 'app:pick-file'
   | 'app:save-file'
 
@@ -122,12 +124,13 @@ export interface RShellApi {
   }
   files: {
     list(sessionId: string, path: string): Promise<FileInfo[]>
-    upload(sessionId: string, localPath: string, remotePath: string, onProgress?: (progress: TransferProgress) => void): Promise<void>
-    download(sessionId: string, remotePath: string, localPath: string, onProgress?: (progress: TransferProgress) => void): Promise<void>
+    upload(sessionId: string, localPath: string, remotePath: string, transferId: string): Promise<void>
+    download(sessionId: string, remotePath: string, localPath: string, transferId: string): Promise<void>
     delete(sessionId: string, path: string): Promise<void>
     mkdir(sessionId: string, path: string): Promise<void>
     rename(sessionId: string, oldPath: string, newPath: string): Promise<void>
     stat(sessionId: string, path: string): Promise<FileInfo>
+    resolve(sessionId: string, path: string): Promise<string>
     read(sessionId: string, path: string): Promise<string>
     write(sessionId: string, path: string, content: string): Promise<void>
     cancel(transferId: string): Promise<void>

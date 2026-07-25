@@ -8,6 +8,7 @@ export class IPCManager {
   private connectionStore: ConnectionStore
   private sessions: Map<string, Session> = new Map()
   private window: BrowserWindow
+  private shellCallbacksAttached = new Set<string>()
 
   constructor(window: BrowserWindow) {
     this.sshService = new SSHService()
@@ -52,6 +53,14 @@ export class IPCManager {
       }
     })
 
+    ipcMain.handle('sessions:open', (_event, configId: string) => {
+      return this.openSession(configId)
+    })
+
+    ipcMain.handle('sessions:open-shell', (_event, sessionId: string, size: TerminalSize) => {
+      return this.setupShellCallbacks(sessionId, size)
+    })
+
     ipcMain.handle('sessions:list', () => {
       return Array.from(this.sessions.values())
     })
@@ -59,6 +68,7 @@ export class IPCManager {
     ipcMain.handle('sessions:close', (_event, sessionId: string) => {
       this.sshService.disconnect(sessionId)
       this.sessions.delete(sessionId)
+      this.shellCallbacksAttached.delete(sessionId)
     })
 
     ipcMain.on('sessions:send-input', (_event, sessionId: string, data: string) => {
@@ -110,7 +120,7 @@ export class IPCManager {
     ipcMain.handle('files:upload', async (_event, sessionId: string, localPath: string, remotePath: string, transferId: string) => {
       await this.sshService.uploadFile(sessionId, localPath, remotePath, transferId, (percent, speed) => {
         if (!this.window.isDestroyed()) {
-          this.window.webContents.send('files:progress', { id: transferId, percent, speed })
+          this.window.webContents.send('files:progress', { sessionId, id: transferId, percent, speed })
         }
       })
     })
@@ -118,7 +128,7 @@ export class IPCManager {
     ipcMain.handle('files:download', async (_event, sessionId: string, remotePath: string, localPath: string, transferId: string) => {
       await this.sshService.downloadFile(sessionId, remotePath, localPath, transferId, (percent, speed) => {
         if (!this.window.isDestroyed()) {
-          this.window.webContents.send('files:progress', { id: transferId, percent, speed })
+          this.window.webContents.send('files:progress', { sessionId, id: transferId, percent, speed })
         }
       })
     })
@@ -151,6 +161,10 @@ export class IPCManager {
       return this.sshService.stat(sessionId, remotePath)
     })
 
+    ipcMain.handle('files:resolve', async (_event, sessionId: string, remotePath: string) => {
+      return this.sshService.resolveRemotePath(sessionId, remotePath)
+    })
+
     ipcMain.handle('app:pick-file', async (_event, options?: Electron.OpenDialogOptions) => {
       const result = await dialog.showOpenDialog(this.window, {
         properties: ['openFile'],
@@ -165,7 +179,7 @@ export class IPCManager {
     })
 
     ipcMain.handle('app:save-file', async (_event, options?: Electron.SaveDialogOptions) => {
-      const result = await dialog.showSaveDialog(this.window, options)
+      const result = await dialog.showSaveDialog(this.window, options ?? {})
 
       if (result.canceled) {
         return null
@@ -194,27 +208,21 @@ export class IPCManager {
     return session
   }
 
-  setupShellCallbacks(sessionId: string, window: BrowserWindow, size?: TerminalSize): void {
-    this.sshService.openShell(sessionId, size).then(() => {
-      this.sshService.onShellData(sessionId, (data) => {
-        if (!window.isDestroyed()) {
-          window.webContents.send('shell:data', sessionId, data)
-        }
-      })
+  async setupShellCallbacks(sessionId: string, size?: TerminalSize): Promise<void> {
+    await this.sshService.openShell(sessionId, size)
+    if (this.shellCallbacksAttached.has(sessionId)) return
 
-      this.sshService.onShellClose(sessionId, () => {
-        if (!window.isDestroyed()) {
-          window.webContents.send('shell:close', sessionId)
-        }
-        const appSession = this.sessions.get(sessionId)
-        if (appSession) {
-          appSession.connected = false
-        }
-      })
-    }).catch((err) => {
-      console.error(`Failed to open shell for session ${sessionId}:`, err)
-      if (!window.isDestroyed()) {
-        window.webContents.send('shell:close', sessionId)
+    this.shellCallbacksAttached.add(sessionId)
+    this.sshService.onShellData(sessionId, (data) => {
+      if (!this.window.isDestroyed()) {
+        this.window.webContents.send('shell:data', sessionId, data)
+      }
+    })
+
+    this.sshService.onShellClose(sessionId, () => {
+      this.shellCallbacksAttached.delete(sessionId)
+      if (!this.window.isDestroyed()) {
+        this.window.webContents.send('shell:close', sessionId)
       }
       const appSession = this.sessions.get(sessionId)
       if (appSession) {
@@ -226,5 +234,19 @@ export class IPCManager {
   disconnectAll(): void {
     this.sshService.disconnectAll()
     this.sessions.clear()
+    this.shellCallbacksAttached.clear()
+  }
+
+  dispose(): void {
+    this.disconnectAll()
+    const handleChannels = [
+      'connections:list', 'connections:save', 'connections:delete', 'connections:get', 'connections:test',
+      'sessions:open', 'sessions:open-shell', 'sessions:list', 'sessions:close', 'sessions:execute', 'sessions:stats',
+      'files:list', 'files:upload', 'files:download', 'files:cancel', 'files:delete', 'files:mkdir',
+      'files:read', 'files:write', 'files:rename', 'files:stat', 'files:resolve', 'app:pick-file', 'app:save-file',
+    ]
+    for (const channel of handleChannels) ipcMain.removeHandler(channel)
+    ipcMain.removeAllListeners('sessions:send-input')
+    ipcMain.removeAllListeners('sessions:resize')
   }
 }
