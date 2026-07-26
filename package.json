@@ -19,9 +19,9 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "package:mac": "pnpm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64",
-    "package:mac:signed": "pnpm run build && electron-builder --mac --arm64",
-    "package:win": "pnpm run build && electron-builder --win --x64"
+    "package:mac": "pnpm run build && CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --mac --arm64",
+    "package:mac:signed": "pnpm run build && ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --mac --arm64",
+    "package:win": "pnpm run build && ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win --x64"
   },
   "dependencies": {
     "ssh2": "^1.16.0"
