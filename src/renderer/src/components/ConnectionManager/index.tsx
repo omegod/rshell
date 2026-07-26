@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Modal, Button, message, Spin, Empty } from 'antd'
+import { Modal, Button, message, Spin, Empty, Input } from 'antd'
 import {
   PlusOutlined,
   EditOutlined,
@@ -8,6 +8,7 @@ import {
   ExclamationCircleOutlined,
   CloudServerOutlined,
   RightOutlined,
+  SearchOutlined,
 } from '@ant-design/icons'
 import { SSHConnectionConfig } from '../../../../shared/types'
 
@@ -33,6 +34,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
   const { connections, loading, fetchConnections, removeConnection } = useConnectionStore()
   const [connectingId, setConnectingId] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [searchText, setSearchText] = useState('')
   const [messageApi, contextHolder] = message.useMessage()
   const [modal, modalContextHolder] = Modal.useModal()
 
@@ -40,6 +42,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
     if (open || embedded) {
       fetchConnections()
       setConnectingId(null)
+      setSearchText('')
     }
   }, [open, embedded])
 
@@ -88,6 +91,27 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
     [connections, selectedId]
   )
 
+  const filteredConnections = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase()
+    if (!keyword) return connections
+    return connections.filter((conn) =>
+      [conn.name, conn.host, conn.username].some((field) =>
+        field?.toLowerCase().includes(keyword)
+      )
+    )
+  }, [connections, searchText])
+
+  const searchBar = !loading && connections.length > 0 && (
+    <Input
+      className="connection-search"
+      allowClear
+      prefix={<SearchOutlined />}
+      placeholder="搜索名称、主机或用户名"
+      value={searchText}
+      onChange={(e) => setSearchText(e.target.value)}
+    />
+  )
+
   const listContent = (
     <div className="connection-list-panel">
       {loading ? (
@@ -101,8 +125,12 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         </div>
+      ) : filteredConnections.length === 0 ? (
+        <div className="connection-list-state">
+          <Empty description="无匹配的连接" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        </div>
       ) : (
-        connections.map((conn) => (
+        filteredConnections.map((conn) => (
           <div
             key={conn.id}
             className={`connection-row ${conn.id === selectedId ? 'selected' : ''}`}
@@ -180,6 +208,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
               新建连接
             </Button>
           </header>
+          {searchBar}
           {listContent}
           {connections.length > 0 && (
             <div className="connection-actions">{actionButtons(false)}</div>
@@ -201,6 +230,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
     >
       {contextHolder}
       {modalContextHolder}
+      {searchBar}
       <div className="connection-modal-list">{listContent}</div>
     </Modal>
   )

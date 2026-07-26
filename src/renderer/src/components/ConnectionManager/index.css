@@ -1,7 +1,9 @@
 /* ---------- Home (embedded) ---------- */
 .connection-home {
   height: 100%;
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-secondary);
   color: var(--text-primary);
 }
@@ -10,9 +12,15 @@
   width: min(640px, calc(100% - 48px));
   margin: 0 auto;
   padding: 52px 0 32px;
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .connection-home-header {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -36,10 +44,16 @@
 }
 
 .connection-actions {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 14px;
+}
+
+.connection-search {
+  flex-shrink: 0;
+  margin-bottom: 10px;
 }
 
 /* ---------- Grouped list ---------- */
@@ -48,13 +62,14 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .connection-modal-list {
   max-height: 336px;
-  overflow-y: auto;
-  margin: -2px -4px;
-  padding: 2px 4px;
+  display: flex;
+  flex-direction: column;
 }
 
 .connection-list-state {
