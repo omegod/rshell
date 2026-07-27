@@ -11,6 +11,7 @@ if (process.env['RSHELL_REMOTE_DEBUGGING_PORT']) {
 
 let mainWindow: BrowserWindow | null = null
 let ipcManager: IPCManager | null = null
+let isQuitting = false
 
 function createWindow(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -48,6 +49,14 @@ function createWindow(): void {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
+  })
+
+  // macOS 拦截关闭事件，改为隐藏窗口（点 Dock 图标经 activate 重新显示）
+  mainWindow.on('close', (event) => {
+    if (process.platform === 'darwin' && !isQuitting) {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -163,5 +172,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  isQuitting = true
   ipcManager?.disconnectAll()
 })
