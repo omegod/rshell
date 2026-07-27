@@ -153,6 +153,8 @@ const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
       onCancel={onClose}
       width={520}
       centered
+      // 连接管理弹窗内可打开本弹窗，需稳定高于其层级（平级 Modal 均为 1000）
+      zIndex={1100}
       footer={(
         <div className="rshell-modal-footer">
           <Button key="cancel" onClick={onClose}>
