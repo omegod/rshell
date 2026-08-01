@@ -598,8 +598,152 @@ export class SSHService {
     })
   }
 
-  async getSystemStats(sessionId: string): Promise<{ cpu: number; mem: { used: number; total: number }; net: { rx: number; tx: number } }> {
+  async copyFile(sessionId: string, srcPath: string, destPath: string): Promise<void> {
     const session = this.sessions.get(sessionId)
+    if (!session || !session.connected) {
+      throw new Error('Session not connected')
+    }
+
+    const resolvedSrc = await this.resolvePath(sessionId, srcPath)
+    const resolvedDest = await this.resolvePath(sessionId, destPath)
+
+    const stat = (p: string) => new Promise<import('ssh2').Stats>((resolve, reject) => {
+      session.sftp.lstat(p, (err, s) => (err ? reject(new Error(`lstat failed: ${err}`)) : resolve(s)))
+    })
+    const readdir = (p: string) => new Promise<import('ssh2').FileEntry[]>((resolve, reject) => {
+      session.sftp.readdir(p, (err, list) => (err ? reject(new Error(`readdir failed: ${err}`)) : resolve(list)))
+    })
+    const mkdir = (p: string) => new Promise<void>((resolve, reject) => {
+      session.sftp.mkdir(p, (err) => (err ? reject(new Error(`mkdir failed: ${err}`)) : resolve()))
+    })
+    const copyOne = (from: string, to: string): Promise<void> => new Promise((resolve, reject) => {
+      const readStream = session.sftp.createReadStream(from)
+      const writeStream = session.sftp.createWriteStream(to)
+      let settled = false
+      const fail = (error: Error) => {
+        if (settled) return
+        settled = true
+        readStream.destroy()
+        writeStream.destroy()
+        session.sftp.unlink(to, () => {})
+        reject(error)
+      }
+      writeStream.on('close', () => {
+        if (!settled) {
+          settled = true
+          resolve()
+        }
+      })
+      writeStream.on('error', (err: Error) => fail(new Error(`Copy write failed: ${err.message}`)))
+      readStream.on('error', (err: Error) => fail(new Error(`Copy read failed: ${err.message}`)))
+      readStream.pipe(writeStream)
+    })
+    const copyTree = async (from: string, to: string) => {
+      const stats = await stat(from)
+      if (stats.isDirectory()) {
+        await mkdir(to)
+        const list = await readdir(from)
+        for (const entry of list) {
+          await copyTree(`${from}/${entry.filename}`, `${to}/${entry.filename}`)
+        }
+      } else {
+        await copyOne(from, to)
+      }
+    }
+
+    await copyTree(resolvedSrc, resolvedDest)
+  }
+
+  async downloadDirectory(sessionId: string, remotePath: string, localPath: string, transferId: string, onProgress?: (percent: number, bytesPerSec: number) => void): Promise<void> {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.connected) {
+      throw new Error('Session not connected')
+    }
+
+    const resolvedRemotePath = await this.resolvePath(sessionId, remotePath)
+    const parentDir = path.posix.dirname(resolvedRemotePath)
+    const baseName = path.posix.basename(resolvedRemotePath)
+    const quote = (p: string) => `'${p.replace(/'/g, `'\\''`)}'`
+    const command = `tar czf - -C ${quote(parentDir)} ${quote(baseName)}`
+
+    return new Promise((resolve, reject) => {
+      const writeStream = fs.createWriteStream(localPath)
+      let transferred = 0
+      let lastTime = Date.now()
+      let lastBytes = 0
+      let aborted = false
+      let settled = false
+      let channel: ClientChannel | null = null
+
+      const cleanup = () => {
+        this.transfers.delete(transferId)
+      }
+
+      const fail = (error: Error) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        channel?.close()
+        writeStream.destroy()
+        fs.rm(localPath, { force: true }, () => {})
+        reject(error)
+      }
+
+      const cancel = () => {
+        if (settled) return
+        aborted = true
+        fail(new Error('Cancelled'))
+      }
+
+      this.transfers.set(transferId, { cancel })
+
+      session.client.exec(command, (err, stream) => {
+        if (err) {
+          fail(new Error(`Failed to start tar: ${err}`))
+          return
+        }
+        channel = stream
+
+        let stderr = ''
+        stream.stderr.on('data', (data: Buffer) => {
+          stderr += data.toString()
+        })
+
+        stream.on('data', (chunk: Buffer) => {
+          if (aborted) return
+          transferred += chunk.length
+          const now = Date.now()
+          const dt = (now - lastTime) / 1000
+          if (dt >= 0.3) {
+            const bytesPerSec = (transferred - lastBytes) / dt
+            lastTime = now
+            lastBytes = transferred
+            if (onProgress) onProgress(-1, bytesPerSec / 1024)
+          }
+        })
+
+        writeStream.on('error', (writeErr) => {
+          if (!aborted) fail(new Error(`Write local file failed: ${writeErr.message}`))
+        })
+
+        stream.on('error', (streamErr: Error) => fail(new Error(`tar stream failed: ${streamErr.message}`)))
+
+        stream.on('close', () => {
+          if (settled || aborted) return
+          if (stderr.trim() && transferred === 0) {
+            fail(new Error(stderr.trim() || 'tar failed'))
+            return
+          }
+          settled = true
+          cleanup()
+          if (onProgress) onProgress(100, 0)
+          resolve()
+        })
+      })
+    })
+  }
+
+  async getSystemStats(sessionId: string): Promise<{ cpu: number; mem: { used: number; total: number }; net: { rx: number; tx: number } }> {    const session = this.sessions.get(sessionId)
     if (!session || !session.connected) {
       throw new Error('Session not connected')
     }

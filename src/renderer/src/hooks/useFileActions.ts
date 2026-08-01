@@ -129,16 +129,18 @@ export function useFileActions(sessionId: string) {
   }, [sessionId, currentPath, childrenMap, addTransfer, updateTransfer, addFileItem, addChildFileItem, loadFiles])
 
   const handleDownload = useCallback(async (file: FileInfo) => {
-    const localPath = await window.api.app.saveFile({ title: '保存文件', defaultPath: file.name })
+    const isDir = file.isDirectory
+    const fileName = isDir ? `${file.name}.tar.gz` : file.name
+    const localPath = await window.api.app.saveFile({ title: '保存文件', defaultPath: fileName })
     if (!localPath) return
     const id = `download_${crypto.randomUUID()}`
 
     addTransfer({
       id,
       sessionId,
-      fileName: file.name,
+      fileName,
       direction: 'download',
-      progress: 0,
+      progress: isDir ? -1 : 0,
       speed: 0,
       status: 'transferring',
       remotePath: file.path,
@@ -146,7 +148,11 @@ export function useFileActions(sessionId: string) {
     })
 
     try {
-      await window.api.files.download(sessionId, file.path, localPath, id)
+      if (isDir) {
+        await window.api.files.downloadDir(sessionId, file.path, localPath, id)
+      } else {
+        await window.api.files.download(sessionId, file.path, localPath, id)
+      }
       updateTransfer(id, { progress: 100, speed: 0, status: 'completed' })
       message.success('下载成功')
     } catch (err) {

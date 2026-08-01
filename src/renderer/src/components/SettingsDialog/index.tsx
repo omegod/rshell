@@ -1,12 +1,20 @@
 import React from 'react'
 import { Modal, Form, InputNumber, Radio, Button } from 'antd'
-import { SunOutlined, MoonOutlined, DesktopOutlined } from '@ant-design/icons'
+import {
+  SunOutlined,
+  MoonOutlined,
+  DesktopOutlined,
+  BgColorsOutlined,
+  FontColorsOutlined,
+  SkinOutlined,
+} from '@ant-design/icons'
 
 import './index.css'
 
 interface Settings {
   theme: 'light' | 'dark' | 'system'
   terminalFontSize: number
+  terminalBackground: 'black' | 'white' | 'theme'
 }
 
 interface SettingsDialogProps {
@@ -73,6 +81,23 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
             </Radio.Button>
             <Radio.Button value="system" style={{ flex: 1, textAlign: 'center' }}>
               <DesktopOutlined /> 跟随系统
+            </Radio.Button>
+          </Radio.Group>
+        </Form.Item>
+
+        <Form.Item
+          name="terminalBackground"
+          label="终端背景"
+        >
+          <Radio.Group buttonStyle="solid" style={{ width: '100%', display: 'flex' }}>
+            <Radio.Button value="black" style={{ flex: 1, textAlign: 'center' }}>
+              <BgColorsOutlined /> 黑色
+            </Radio.Button>
+            <Radio.Button value="white" style={{ flex: 1, textAlign: 'center' }}>
+              <FontColorsOutlined /> 白色
+            </Radio.Button>
+            <Radio.Button value="theme" style={{ flex: 1, textAlign: 'center' }}>
+              <SkinOutlined /> 跟随主题
             </Radio.Button>
           </Radio.Group>
         </Form.Item>

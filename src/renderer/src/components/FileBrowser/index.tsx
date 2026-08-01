@@ -16,6 +16,9 @@ import {
   FileTextOutlined,
   MoreOutlined,
   PlusOutlined,
+  CopyOutlined,
+  ScissorOutlined,
+  SnippetsOutlined,
 } from '@ant-design/icons'
 import { FileInfo } from '../../../../shared/types'
 import type { DataNode, TreeProps } from 'antd/es/tree'
@@ -34,6 +37,13 @@ interface FileBrowserProps {
 
 const PARENT_KEY = '__parent__'
 const ROOT_KEY = '__root__'
+
+interface ClipboardItem {
+  type: 'copy' | 'cut'
+  path: string
+  name: string
+  sessionId: string
+}
 
 export default function FileBrowser({
   sessionId,
@@ -221,6 +231,75 @@ export default function FileBrowser({
     await window.api.files.cancel(id)
   }
 
+  const [clipboard, setClipboard] = useState<ClipboardItem | null>(null)
+
+  const canPaste = clipboard !== null && clipboard.sessionId === sessionId
+
+  const handleCopy = (file: FileInfo) => {
+    setClipboard({ type: 'copy', path: file.path, name: file.name, sessionId })
+    messageApi.success(`已复制 "${file.name}"`)
+  }
+
+  const handleCut = (file: FileInfo) => {
+    setClipboard({ type: 'cut', path: file.path, name: file.name, sessionId })
+    messageApi.success(`已剪切 "${file.name}"`)
+  }
+
+  const handlePaste = async (targetDir: string) => {
+    const clip = clipboard
+    if (!clip || clip.sessionId !== sessionId) return
+
+    const targetPath = targetDir === '/' ? `/${clip.name}` : `${targetDir}/${clip.name}`
+    const srcPath = clip.path
+
+    // 粘贴到原位：无操作
+    if (targetPath === srcPath) {
+      messageApi.info('文件已在该位置')
+      if (clip.type === 'cut') setClipboard(null)
+      return
+    }
+
+    try {
+      const existing = await window.api.files.stat(sessionId, targetPath).catch(() => null)
+      if (existing) {
+        messageApi.error(`目标位置已存在 "${clip.name}"`)
+        return
+      }
+
+      if (clip.type === 'copy') {
+        await window.api.files.copy(sessionId, srcPath, targetPath)
+        messageApi.success('复制完成')
+      } else {
+        await window.api.files.rename(sessionId, srcPath, targetPath)
+        messageApi.success('剪切完成')
+        setClipboard(null)
+      }
+
+      // 刷新目标目录
+      if (targetDir === currentPath) {
+        addFileItem(targetPath)
+      } else if (childrenMap[targetDir]) {
+        addChildFileItem(targetPath, targetDir)
+      } else {
+        setLoadedKeys(sessionId, (prev) => prev.filter(k => k !== targetDir))
+      }
+
+      // 剪切跨目录时刷新源目录
+      if (clip.type === 'cut' && targetPath !== srcPath) {
+        const lastSlash = srcPath.lastIndexOf('/')
+        const srcDir = lastSlash === 0 ? '/' : srcPath.slice(0, lastSlash)
+        if (srcDir === currentPath) {
+          removeFile(sessionId, srcPath)
+        } else {
+          removeChildFile(sessionId, srcDir, srcPath)
+          setLoadedKeys(sessionId, (prev) => prev.filter(k => k !== srcDir))
+        }
+      }
+    } catch (err) {
+      messageApi.error(`粘贴失败: ${err instanceof Error ? err.message : '未知错误'}`)
+    }
+  }
+
   const handleRename = (file: FileInfo) => {
     setEditingKey(file.path)
     setEditingValue(file.name)
@@ -303,11 +382,25 @@ export default function FileBrowser({
       }})
       items.push({ key: 'upload-to', label: '上传', icon: <UploadOutlined />, onClick: () => handleUpload(file.path) })
       items.push({ type: 'divider' as const })
+      if (canPaste) {
+        items.push({ key: 'paste', label: '粘贴', icon: <SnippetsOutlined />, onClick: () => handlePaste(file.path) })
+        items.push({ type: 'divider' as const })
+      }
     }
+    items.push({ key: 'copy', label: '复制', icon: <CopyOutlined />, onClick: () => handleCopy(file) })
+    items.push({ key: 'cut', label: '剪切', icon: <ScissorOutlined />, onClick: () => handleCut(file) })
+    if (canPaste && !file.isDirectory) {
+      const lastSlash = file.path.lastIndexOf('/')
+      const parentDir = lastSlash === 0 ? '/' : file.path.slice(0, lastSlash)
+      items.push({ key: 'paste', label: '粘贴', icon: <SnippetsOutlined />, onClick: () => handlePaste(parentDir) })
+    }
+    items.push({ type: 'divider' as const })
     items.push({ key: 'rename', label: '重命名', icon: <EditOutlined />, onClick: () => handleRename(file) })
     if (!file.isDirectory) {
       items.push({ key: 'edit', label: '编辑', icon: <FileTextOutlined />, onClick: () => onEditFile(file) })
       items.push({ key: 'download', label: '下载', icon: <DownloadOutlined />, onClick: () => handleDownload(file) })
+    } else {
+      items.push({ key: 'download', label: '下载（tar.gz）', icon: <DownloadOutlined />, onClick: () => handleDownload(file) })
     }
     items.push({ type: 'divider' as const })
     items.push({ key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true, onClick: () => {
@@ -327,6 +420,7 @@ export default function FileBrowser({
     const isDir = file.isDirectory
     const children = isDir ? childrenMap[file.path] : undefined
     const isEditing = editingKey === file.path
+    const isCut = clipboard?.type === 'cut' && clipboard.path === file.path
 
     if (isEditing) {
       return {
@@ -356,7 +450,7 @@ export default function FileBrowser({
       key: file.path,
       title: (
         <Dropdown menu={{ items: contextMenuItems(file) }} trigger={['contextMenu']}>
-          <div className="file-tree-item">
+          <div className={`file-tree-item ${isCut ? 'cut' : ''}`}>
             <span className="file-icon">
               {isDir
                 ? (expandedKeys.includes(file.path)
@@ -365,6 +459,7 @@ export default function FileBrowser({
                 : <FileOutlined style={{ color: 'var(--text-tertiary)' }} />}
             </span>
             <span className="file-name">{file.name}</span>
+            {isCut && <ScissorOutlined className="file-cut-badge" />}
             <span className="file-meta">
               {!isDir && <span className="file-size">{formatSize(file.size)}</span>}
             </span>
@@ -393,6 +488,12 @@ export default function FileBrowser({
     const rootMenuItems: any[] = [
       { key: 'refresh', label: '刷新', icon: <ReloadOutlined />, onClick: () => { loadFiles(currentPath) } },
       { type: 'divider' as const },
+      ...(canPaste
+        ? [
+          { key: 'paste', label: '粘贴', icon: <SnippetsOutlined />, onClick: () => handlePaste(currentPath) },
+          { type: 'divider' as const },
+        ]
+        : []),
       { key: 'create', label: '新建', icon: <PlusOutlined />, onClick: () => {
         setCreatePath(currentPath); setCreateType('folder'); setCreateName(''); setShowCreateModal(true);
       }},
@@ -414,7 +515,7 @@ export default function FileBrowser({
       ),
       children: rootChildren,
     }]
-  }, [files, childrenMap, currentPath, dirName, expandedKeys, editingKey, editingValue])
+  }, [files, childrenMap, currentPath, dirName, expandedKeys, editingKey, editingValue, clipboard, canPaste])
 
   const handleExpand: TreeProps['onExpand'] = (expandedKeysValue) => {
     setStoreExpandedKeys(sessionId, expandedKeysValue as string[])

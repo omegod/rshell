@@ -1,13 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { DashboardOutlined, CloudDownloadOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import { SystemStats } from '../../../../shared/types'
+import { resolveTerminalStatus } from './index'
 
 interface StatusBarProps {
   sessionId: string
   isActive: boolean
+  terminalBackground?: 'black' | 'white' | 'theme'
+  effectiveTheme?: 'light' | 'dark'
 }
 
-const StatusBar: React.FC<StatusBarProps> = ({ sessionId, isActive }) => {
+const StatusBar: React.FC<StatusBarProps> = ({
+  sessionId,
+  isActive,
+  terminalBackground = 'theme',
+  effectiveTheme = 'dark',
+}) => {
+  const statusVars = resolveTerminalStatus(terminalBackground, effectiveTheme)
   const [stats, setStats] = useState<SystemStats | null>(null)
   const [unavailable, setUnavailable] = useState(false)
   const [netSpeed, setNetSpeed] = useState<{ up: number; down: number }>({ up: 0, down: 0 })
@@ -69,7 +78,7 @@ const StatusBar: React.FC<StatusBarProps> = ({ sessionId, isActive }) => {
   }
 
   return (
-    <div className="terminal-status-bar">
+    <div className="terminal-status-bar" style={{ ...statusVars } as React.CSSProperties}>
       {stats ? (
         <>
           <div className="status-group">

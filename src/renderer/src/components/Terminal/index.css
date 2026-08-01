@@ -83,7 +83,7 @@
 }
 
 .status-item-value {
-  color: #d6d6da;
+  color: var(--terminal-status-value);
 }
 
 .status-hint {

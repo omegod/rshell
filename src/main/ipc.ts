@@ -157,6 +157,18 @@ export class IPCManager {
       await this.sshService.rename(sessionId, oldPath, newPath)
     })
 
+    ipcMain.handle('files:copy', async (_event, sessionId: string, srcPath: string, destPath: string) => {
+      await this.sshService.copyFile(sessionId, srcPath, destPath)
+    })
+
+    ipcMain.handle('files:download-dir', async (_event, sessionId: string, remotePath: string, localPath: string, transferId: string) => {
+      await this.sshService.downloadDirectory(sessionId, remotePath, localPath, transferId, (percent, speed) => {
+        if (!this.window.isDestroyed()) {
+          this.window.webContents.send('files:progress', { sessionId, id: transferId, percent, speed })
+        }
+      })
+    })
+
     ipcMain.handle('files:stat', async (_event, sessionId: string, remotePath: string) => {
       return this.sshService.stat(sessionId, remotePath)
     })

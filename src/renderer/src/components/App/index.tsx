@@ -26,13 +26,15 @@ interface SessionState {
 
 type ThemeMode = 'light' | 'dark' | 'system'
 type ResolvedTheme = 'light' | 'dark'
+type TerminalBackground = 'black' | 'white' | 'theme'
 
 interface AppSettings {
   theme: ThemeMode
   terminalFontSize: number
+  terminalBackground: TerminalBackground
 }
 
-const DEFAULT_SETTINGS: AppSettings = { theme: 'system', terminalFontSize: 14 }
+const DEFAULT_SETTINGS: AppSettings = { theme: 'system', terminalFontSize: 13, terminalBackground: 'theme' }
 
 function loadSettings(): AppSettings {
   try {
@@ -43,7 +45,11 @@ function loadSettings(): AppSettings {
       theme: parsed.theme === 'dark' || parsed.theme === 'light' || parsed.theme === 'system'
         ? parsed.theme
         : 'system',
-      terminalFontSize: typeof parsed.terminalFontSize === 'number' ? parsed.terminalFontSize : 14,
+      terminalFontSize: typeof parsed.terminalFontSize === 'number' ? parsed.terminalFontSize : 13,
+      terminalBackground:
+        parsed.terminalBackground === 'black' || parsed.terminalBackground === 'white' || parsed.terminalBackground === 'theme'
+          ? parsed.terminalBackground
+          : 'theme',
     }
   } catch {
     return DEFAULT_SETTINGS
@@ -303,10 +309,14 @@ function App() {
                         sessionId={s.session.id}
                         isActive={s.session.id === activeSessionId}
                         fontSize={settings.terminalFontSize}
+                        terminalBackground={settings.terminalBackground}
+                        effectiveTheme={effectiveTheme}
                       />
                       <StatusBar
                         sessionId={s.session.id}
                         isActive={s.session.id === activeSessionId}
+                        terminalBackground={settings.terminalBackground}
+                        effectiveTheme={effectiveTheme}
                       />
                     </div>
                   </div>

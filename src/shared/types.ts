@@ -129,6 +129,8 @@ export interface RShellApi {
     delete(sessionId: string, path: string): Promise<void>
     mkdir(sessionId: string, path: string): Promise<void>
     rename(sessionId: string, oldPath: string, newPath: string): Promise<void>
+    copy(sessionId: string, srcPath: string, destPath: string): Promise<void>
+    downloadDir(sessionId: string, remotePath: string, localPath: string, transferId: string): Promise<void>
     stat(sessionId: string, path: string): Promise<FileInfo>
     resolve(sessionId: string, path: string): Promise<string>
     read(sessionId: string, path: string): Promise<string>

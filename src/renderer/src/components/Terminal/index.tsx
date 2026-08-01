@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Spin } from 'antd'
 import { Terminal as XTerminal } from '@xterm/xterm'
+import type { ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -12,9 +13,91 @@ interface TerminalProps {
   sessionId: string
   isActive: boolean
   fontSize?: number
+  terminalBackground?: 'black' | 'white' | 'theme'
+  effectiveTheme?: 'light' | 'dark'
 }
 
-const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 }) => {
+const DARK_THEME: ITheme = {
+  background: '#181a1b',
+  foreground: '#d4d4d4',
+  cursor: '#d4d4d4',
+  cursorAccent: '#181a1b',
+  selectionBackground: '#264f78',
+  selectionForeground: '#ffffff',
+  black: '#000000',
+  red: '#cd3131',
+  green: '#0dbc79',
+  yellow: '#e5e510',
+  blue: '#2472c8',
+  magenta: '#bc3fbc',
+  cyan: '#11a8cd',
+  white: '#e5e5e5',
+  brightBlack: '#666666',
+  brightRed: '#f14c4c',
+  brightGreen: '#23d917',
+  brightYellow: '#f5f543',
+  brightBlue: '#3b8eea',
+  brightMagenta: '#d670d6',
+  brightCyan: '#29b8db',
+  brightWhite: '#ffffff',
+}
+
+const LIGHT_THEME: ITheme = {
+  background: '#ffffff',
+  foreground: '#1d1d1f',
+  cursor: '#1d1d1f',
+  cursorAccent: '#ffffff',
+  selectionBackground: '#cfe3ff',
+  selectionForeground: '#000000',
+  black: '#000000',
+  red: '#cd3131',
+  green: '#00bc00',
+  yellow: '#949800',
+  blue: '#0451a5',
+  magenta: '#bc05bc',
+  cyan: '#0598bc',
+  white: '#555555',
+  brightBlack: '#666666',
+  brightRed: '#cd3131',
+  brightGreen: '#14ce14',
+  brightYellow: '#b5ba00',
+  brightBlue: '#0451a5',
+  brightMagenta: '#bc05bc',
+  brightCyan: '#0598bc',
+  brightWhite: '#a5a5a5',
+}
+
+function resolveTerminalTheme(background: 'black' | 'white' | 'theme', effectiveTheme: 'light' | 'dark'): ITheme {
+  const useDark = background === 'black' || (background === 'theme' && effectiveTheme === 'dark')
+  return useDark ? DARK_THEME : LIGHT_THEME
+}
+
+export const TERMINAL_STATUS_DARK = {
+  '--terminal-status': '#232428',
+  '--terminal-status-border': 'rgba(255, 255, 255, 0.07)',
+  '--terminal-status-text': '#98989d',
+  '--terminal-status-value': '#d6d6da',
+} as const
+
+export const TERMINAL_STATUS_LIGHT = {
+  '--terminal-status': '#f2f2f4',
+  '--terminal-status-border': 'rgba(0, 0, 0, 0.08)',
+  '--terminal-status-text': '#6e6e73',
+  '--terminal-status-value': '#1d1d1f',
+} as const
+
+export function resolveTerminalStatus(bg: 'black' | 'white' | 'theme', effectiveTheme: 'light' | 'dark'): Record<string, string> {
+  const useDark = bg === 'black' || (bg === 'theme' && effectiveTheme === 'dark')
+  return useDark ? { ...TERMINAL_STATUS_DARK } : { ...TERMINAL_STATUS_LIGHT }
+}
+
+const Terminal: React.FC<TerminalProps> = ({
+  sessionId,
+  isActive,
+  fontSize = 14,
+  terminalBackground = 'theme',
+  effectiveTheme = 'dark',
+}) => {
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -23,6 +106,8 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
   const [loading, setLoading] = useState(true)
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
+
+  const terminalTheme = resolveTerminalTheme(terminalBackground, effectiveTheme)
 
   useEffect(() => {
     if (!terminalRef.current) return
@@ -35,30 +120,7 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 10000,
-      theme: {
-        background: '#181a1b',
-        foreground: '#d4d4d4',
-        cursor: '#d4d4d4',
-        cursorAccent: '#181a1b',
-        selectionBackground: '#264f78',
-        selectionForeground: '#ffffff',
-        black: '#000000',
-        red: '#cd3131',
-        green: '#0dbc79',
-        yellow: '#e5e510',
-        blue: '#2472c8',
-        magenta: '#bc3fbc',
-        cyan: '#11a8cd',
-        white: '#e5e5e5',
-        brightBlack: '#666666',
-        brightRed: '#f14c4c',
-        brightGreen: '#23d917',
-        brightYellow: '#f5f543',
-        brightBlue: '#3b8eea',
-        brightMagenta: '#d670d6',
-        brightCyan: '#29b8db',
-        brightWhite: '#ffffff',
-      },
+      theme: { ...terminalTheme },
     })
 
     const fitAddon = new FitAddon()
@@ -167,6 +229,11 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
   }, [fontSize])
 
   useEffect(() => {
+    if (!xtermRef.current) return
+    xtermRef.current.options.theme = resolveTerminalTheme(terminalBackground, effectiveTheme)
+  }, [terminalBackground, effectiveTheme])
+
+  useEffect(() => {
     if (isActive && xtermRef.current) {
       const timer = setTimeout(() => {
         try {
@@ -181,7 +248,10 @@ const Terminal: React.FC<TerminalProps> = ({ sessionId, isActive, fontSize = 14 
   }, [isActive])
 
   return (
-    <div className="terminal-root">
+    <div
+      className="terminal-root"
+      style={{ ['--terminal-bg' as string]: terminalTheme.background }}
+    >
       <div className="terminal-container" style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {loading && (
           <div className="terminal-loading">

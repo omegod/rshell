@@ -87,7 +87,15 @@ export const TransferPanel: React.FC<TransferPanelProps> = ({
                   </div>
                 </div>
                 {t.status === 'transferring' && (
-                  <Progress percent={t.progress} size="small" showInfo={false} strokeWidth={2} strokeColor="var(--accent)" style={{ margin: 0, lineHeight: 1 }} />
+                  <Progress
+                    percent={t.progress < 0 ? 100 : t.progress}
+                    status={t.progress < 0 ? 'active' : undefined}
+                    size="small"
+                    showInfo={false}
+                    strokeWidth={2}
+                    strokeColor="var(--accent)"
+                    style={{ margin: 0, lineHeight: 1 }}
+                  />
                 )}
               </div>
             ))

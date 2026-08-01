@@ -206,6 +206,17 @@
   min-height: 24px;
 }
 
+/* Cut source: dim the row until paste completes */
+.file-tree-item.cut {
+  opacity: 0.45;
+}
+
+.file-cut-badge {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
 .file-icon {
   display: flex;
   align-items: center;
