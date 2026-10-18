@@ -22,6 +22,8 @@ const { Content } = Layout
 interface SessionState {
   session: Session
   currentPath: string
+  /** Creation sequence, keeps the session panes in a stable render order independent of the tab order */
+  seq: number
 }
 
 type ThemeMode = 'light' | 'dark' | 'system'
@@ -72,6 +74,7 @@ function App() {
   const [editingFile, setEditingFile] = useState<{ file: FileInfo; sessionId: string } | null>(null)
   const [isResizing, setIsResizing] = useState(false)
   const sidebarWidthRef = React.useRef(288)
+  const sessionSeqRef = React.useRef(0)
   const [messageApi, contextHolder] = message.useMessage()
   const updateTransfer = useSessionStore((state) => state.updateTransfer)
   const removeSessionState = useSessionStore((state) => state.removeSession)
@@ -170,7 +173,11 @@ function App() {
       } catch {
         // The file browser can still retry the home path directly.
       }
-      setSessions((prev) => [...prev, { session, currentPath: initialPath }])
+      const seq = ++sessionSeqRef.current
+      setSessions((prev) => [
+        ...prev,
+        { session, currentPath: initialPath, seq },
+      ])
       setActiveSessionId(session.id)
       setShowNewConnection(false)
       setShowConnectionManager(false)
@@ -203,6 +210,19 @@ function App() {
     )
   }, [])
 
+  const handleReorderSessions = useCallback((activeId: string, overId: string) => {
+    setSessions((prev) => {
+      const from = prev.findIndex((s) => s.session.id === activeId)
+      const to = prev.findIndex((s) => s.session.id === overId)
+      if (from === -1 || to === -1 || from === to) return prev
+
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }, [])
+
   const handleSaveSettings = (newSettings: AppSettings) => {
     setSettings(newSettings)
     localStorage.setItem('rshell-settings', JSON.stringify(newSettings))
@@ -210,6 +230,13 @@ function App() {
   }
 
   const addConnection = useConnectionStore((state) => state.addConnection)
+
+  // Session panes keep a stable DOM order (creation order) so reordering tabs never moves the
+  // terminal DOM subtree; the tab strip uses the sessions array order instead.
+  const orderedSessions = useMemo(
+    () => [...sessions].sort((a, b) => a.seq - b.seq),
+    [sessions]
+  )
 
   const isDark = effectiveTheme === 'dark'
   const antdTheme = useMemo(() => ({
@@ -274,6 +301,7 @@ function App() {
             activeSessionId={activeSessionId}
             onTabClick={setActiveSessionId}
             onTabClose={handleDisconnect}
+            onReorder={handleReorderSessions}
             onNewConnection={() => {
               setEditingConfig(null)
               setShowNewConnection(true)
@@ -284,7 +312,7 @@ function App() {
         )}
         <Content className="app-content">
           {sessions.length > 0 ? (
-            sessions.map((s) => (
+            orderedSessions.map((s) => (
               <div
                 key={s.session.id}
                 className="session-container"

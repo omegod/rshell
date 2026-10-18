@@ -35,6 +35,9 @@
 }
 
 .xterm-viewport {
+  /* xterm 6.0.0 no longer paints the viewport with the theme background; keep it
+     transparent so the container background shows through the padding/gap areas */
+  background-color: transparent !important;
   overflow-y: auto !important;
 }
 

@@ -70,6 +70,7 @@
   cursor: pointer;
   flex-shrink: 0;
   max-width: 200px;
+  touch-action: none;
   transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
 }
 
@@ -81,6 +82,20 @@
   background-color: var(--bg-primary);
   border-color: var(--border-color);
   color: var(--text-primary);
+}
+
+/* Slot left behind while dragging; the floating copy is rendered by DragOverlay */
+.tab-item.tab-dragging {
+  opacity: 0;
+}
+
+/* Floating tab that follows the pointer */
+.tab-item.tab-overlay {
+  background-color: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  cursor: grabbing;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
 }
 
 .tab-title {
