@@ -5,6 +5,12 @@ import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
 
+// SFTP transfers are pipelined: a single in-flight request is limited by RTT
+// (e.g. 64KB per round trip caps at ~200KB/s on a 300ms link). Issuing many
+// reads/writes concurrently keeps the link saturated on high-latency hosts.
+const SFTP_CHUNK_SIZE = 32 * 1024
+const SFTP_CONCURRENCY = 64
+
 export interface SSHSession {
   id: string
   client: Client
@@ -289,16 +295,47 @@ export class SSHService {
       }
 
       const totalSize = stat.size
+      const readStream = fs.createReadStream(localPath, { highWaterMark: SFTP_CHUNK_SIZE })
+      // ssh2's WriteStream only keeps one WRITE request in flight (the upstream
+      // TODO in SFTP.js), so uploads are RTT-bound too. Pipeline writes instead.
+      const sftpWrite = session.sftp.write.bind(session.sftp) as (
+        handle: Buffer,
+        buffer: Buffer,
+        offset: number,
+        length: number,
+        position: number,
+        callback: (err?: Error | null, bytesWritten?: number) => void
+      ) => void
+
+      let handle: Buffer | null = null
+      let offset = 0
+      let inFlight = 0
+      let readEnded = false
+      let aborted = false
+      let settled = false
       let transferred = 0
       let lastTime = Date.now()
       let lastBytes = 0
-      let aborted = false
-      let settled = false
-      const readStream = fs.createReadStream(localPath)
-      const writeStream = session.sftp.createWriteStream(resolvedRemotePath)
 
       const cleanup = () => {
         this.transfers.delete(transferId)
+      }
+
+      const reportProgress = () => {
+        if (!onProgress || totalSize <= 0) return
+        const now = Date.now()
+        const dt = (now - lastTime) / 1000
+        if (dt < 0.3) return
+        const bytesPerSec = (transferred - lastBytes) / dt
+        lastTime = now
+        lastBytes = transferred
+        onProgress(Math.min(100, Math.round((transferred / totalSize) * 100)), bytesPerSec / 1024)
+      }
+
+      const closeHandle = () => {
+        if (!handle) return
+        session.sftp.close(handle, () => {})
+        handle = null
       }
 
       const fail = (error: Error) => {
@@ -306,7 +343,7 @@ export class SSHService {
         settled = true
         cleanup()
         readStream.destroy()
-        writeStream.destroy()
+        closeHandle()
         session.sftp.unlink(resolvedRemotePath, () => {})
         reject(error)
       }
@@ -319,38 +356,76 @@ export class SSHService {
 
       this.transfers.set(transferId, { cancel })
 
-      readStream.on('data', (chunk: string | Buffer) => {
-        if (aborted) return
-        transferred += Buffer.byteLength(chunk)
-        const now = Date.now()
-        const dt = (now - lastTime) / 1000
-        if (dt >= 0.3) {
-          const bytesPerSec = (transferred - lastBytes) / dt
-          lastTime = now
-          lastBytes = transferred
-          if (onProgress && totalSize > 0) {
-            onProgress(Math.round((transferred / totalSize) * 100), bytesPerSec / 1024)
-          }
-        }
-      })
-
-      writeStream.on('close', () => {
-        if (settled || aborted) return
+      const maybeFinish = () => {
+        if (settled || aborted || !readEnded || inFlight > 0) return
         settled = true
         cleanup()
+        closeHandle()
         if (onProgress && totalSize > 0) onProgress(100, 0)
         resolve()
-      })
+      }
 
-      writeStream.on('error', (err: Error) => {
-        if (!aborted) fail(new Error(`Upload failed: ${err.message}`))
+      const writeChunk = (chunk: Buffer, fileOffset: number, written: number) => {
+        if (aborted || settled || !handle) return
+        sftpWrite(handle, chunk, written, chunk.length - written, fileOffset + written, (err, bytesWritten) => {
+          if (aborted || settled) return
+          if (err) {
+            inFlight--
+            fail(new Error(`Upload failed: ${err.message}`))
+            return
+          }
+          if (!bytesWritten) {
+            inFlight--
+            fail(new Error('Upload failed: server wrote 0 bytes'))
+            return
+          }
+          if (written + bytesWritten < chunk.length) {
+            // Rare partial write: keep sending the remainder of this chunk.
+            writeChunk(chunk, fileOffset, written + bytesWritten)
+            return
+          }
+          inFlight--
+          transferred += chunk.length
+          reportProgress()
+          readStream.resume()
+          maybeFinish()
+        })
+      }
+
+      const onData = (chunk: string | Buffer) => {
+        if (aborted || settled || !handle) return
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        const fileOffset = offset
+        offset += buffer.length
+        inFlight++
+        writeChunk(buffer, fileOffset, 0)
+        if (inFlight >= SFTP_CONCURRENCY) readStream.pause()
+      }
+
+      readStream.on('end', () => {
+        readEnded = true
+        maybeFinish()
       })
 
       readStream.on('error', (err) => {
         if (!aborted) fail(new Error(`Read local file failed: ${err.message}`))
       })
 
-      readStream.pipe(writeStream)
+      session.sftp.open(resolvedRemotePath, 'w', (err, fileHandle) => {
+        if (aborted || settled) {
+          if (!err && fileHandle) {
+            session.sftp.close(fileHandle, () => {})
+            session.sftp.unlink(resolvedRemotePath, () => {})
+          }
+          return
+        }
+        if (err) {
+          fail(new Error(`Open remote file failed: ${err.message}`))
+          return
+        }
+        handle = fileHandle
+        readStream.on('data', onData)
+      })
     })
   }
 
@@ -371,24 +446,48 @@ export class SSHService {
     })
 
     return new Promise((resolve, reject) => {
-      const readStream = session.sftp.createReadStream(resolvedRemotePath)
       const writeStream = fs.createWriteStream(localPath)
-
+      // Out-of-order chunks wait here until every earlier offset has arrived.
+      const pending = new Map<number, Buffer>()
+      let handle: Buffer | null = null
+      let nextOffset = 0
+      let writeOffset = 0
+      let inFlight = 0
+      let eof = false
+      let paused = false
+      let aborted = false
+      let settled = false
+      let endRequested = false
       let transferred = 0
       let lastTime = Date.now()
       let lastBytes = 0
-      let aborted = false
-      let settled = false
 
       const cleanup = () => {
         this.transfers.delete(transferId)
+      }
+
+      const reportProgress = () => {
+        if (!onProgress || totalSize <= 0) return
+        const now = Date.now()
+        const dt = (now - lastTime) / 1000
+        if (dt < 0.3) return
+        const bytesPerSec = (transferred - lastBytes) / dt
+        lastTime = now
+        lastBytes = transferred
+        onProgress(Math.min(100, Math.round((transferred / totalSize) * 100)), bytesPerSec / 1024)
+      }
+
+      const closeHandle = () => {
+        if (!handle) return
+        session.sftp.close(handle, () => {})
+        handle = null
       }
 
       const fail = (error: Error) => {
         if (settled) return
         settled = true
         cleanup()
-        readStream.destroy()
+        closeHandle()
         writeStream.destroy()
         fs.rm(localPath, { force: true }, () => {})
         reject(error)
@@ -402,19 +501,84 @@ export class SSHService {
 
       this.transfers.set(transferId, { cancel })
 
-      readStream.on('data', (chunk: Buffer) => {
-        if (aborted) return
-        transferred += chunk.length
-        const now = Date.now()
-        const dt = (now - lastTime) / 1000
-        if (dt >= 0.3) {
-          const bytesPerSec = (transferred - lastBytes) / dt
-          lastTime = now
-          lastBytes = transferred
-          if (onProgress && totalSize > 0) {
-            onProgress(Math.round((transferred / totalSize) * 100), bytesPerSec / 1024)
+      const maybeFinish = () => {
+        if (settled || aborted || !eof || inFlight > 0) return
+        if (pending.size > 0) {
+          // All reads are done but an offset is missing (the remote file shrank
+          // mid-transfer), so waiting would hang forever.
+          if (!paused) fail(new Error('Remote file changed during download'))
+          return
+        }
+        if (endRequested) return
+        endRequested = true
+        closeHandle()
+        writeStream.end()
+      }
+
+      const flushPending = () => {
+        if (paused || aborted || settled) return
+        while (pending.has(writeOffset)) {
+          const chunk = pending.get(writeOffset)!
+          pending.delete(writeOffset)
+          writeOffset += chunk.length
+          transferred = writeOffset
+          reportProgress()
+          if (!writeStream.write(chunk)) {
+            paused = true
+            break
           }
         }
+        if (!paused) {
+          pump()
+          maybeFinish()
+        }
+      }
+
+      // Read one logical chunk at a fixed offset. SFTP servers may return short
+      // reads, so keep requesting the remainder until the chunk is complete or
+      // EOF is reached.
+      const readChunk = (offset: number, buffer: Buffer, filled: number) => {
+        if (aborted || settled || !handle) return
+        session.sftp.read(handle, buffer, filled, SFTP_CHUNK_SIZE - filled, offset + filled, (err, bytesRead, data) => {
+          if (aborted || settled) return
+          if (err) {
+            inFlight--
+            fail(new Error(`Download failed: ${err.message}`))
+            return
+          }
+          if (bytesRead === 0) {
+            inFlight--
+            if (filled > 0) pending.set(offset, buffer.subarray(0, filled))
+            eof = true
+            flushPending()
+            maybeFinish()
+            return
+          }
+          data.copy(buffer, filled)
+          if (filled + bytesRead < SFTP_CHUNK_SIZE) {
+            readChunk(offset, buffer, filled + bytesRead)
+            return
+          }
+          inFlight--
+          pending.set(offset, buffer)
+          flushPending()
+          maybeFinish()
+        })
+      }
+
+      const pump = () => {
+        if (aborted || settled || !handle || paused || eof) return
+        while (inFlight < SFTP_CONCURRENCY && !eof) {
+          const offset = nextOffset
+          nextOffset += SFTP_CHUNK_SIZE
+          inFlight++
+          readChunk(offset, Buffer.allocUnsafe(SFTP_CHUNK_SIZE), 0)
+        }
+      }
+
+      writeStream.on('drain', () => {
+        paused = false
+        flushPending()
       })
 
       writeStream.on('close', () => {
@@ -429,11 +593,18 @@ export class SSHService {
         if (!aborted) fail(new Error(`Write local file failed: ${err.message}`))
       })
 
-      readStream.on('error', (err: Error) => {
-        if (!aborted) fail(new Error(`Download failed: ${err.message}`))
+      session.sftp.open(resolvedRemotePath, 'r', (err, fileHandle) => {
+        if (aborted || settled) {
+          if (!err && fileHandle) session.sftp.close(fileHandle, () => {})
+          return
+        }
+        if (err) {
+          fail(new Error(`Open remote file failed: ${err.message}`))
+          return
+        }
+        handle = fileHandle
+        pump()
       })
-
-      readStream.pipe(writeStream)
     })
   }
 
